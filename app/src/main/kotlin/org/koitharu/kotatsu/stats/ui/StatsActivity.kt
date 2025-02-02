@@ -12,12 +12,13 @@ import androidx.core.graphics.Insets
 import androidx.core.view.isGone
 import androidx.core.view.isVisible
 import androidx.recyclerview.widget.AsyncListDiffer
-import coil.ImageLoader
+import coil3.ImageLoader
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipDrawable
 import dagger.hilt.android.AndroidEntryPoint
 import org.koitharu.kotatsu.R
 import org.koitharu.kotatsu.core.model.FavouriteCategory
+import org.koitharu.kotatsu.core.nav.router
 import org.koitharu.kotatsu.core.ui.BaseActivity
 import org.koitharu.kotatsu.core.ui.BaseListAdapter
 import org.koitharu.kotatsu.core.ui.dialog.buildAlertDialog
@@ -36,7 +37,6 @@ import org.koitharu.kotatsu.list.ui.adapter.ListItemType
 import org.koitharu.kotatsu.parsers.model.Manga
 import org.koitharu.kotatsu.stats.domain.StatsPeriod
 import org.koitharu.kotatsu.stats.domain.StatsRecord
-import org.koitharu.kotatsu.stats.ui.sheet.MangaStatsSheet
 import org.koitharu.kotatsu.stats.ui.views.PieChartView
 import javax.inject.Inject
 
@@ -103,7 +103,7 @@ class StatsActivity : BaseActivity<ActivityStatsBinding>(),
 	}
 
 	override fun onItemClick(item: Manga, view: View) {
-		MangaStatsSheet.show(supportFragmentManager, item)
+		router.showStatisticSheet(item)
 	}
 
 	override fun onSegmentClick(view: PieChartView, segment: PieChartView.Segment) {

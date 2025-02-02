@@ -9,17 +9,21 @@ import com.google.android.material.chip.Chip
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.flowOn
-import org.koitharu.kotatsu.R
+import org.koitharu.kotatsu.core.nav.router
 import org.koitharu.kotatsu.core.ui.BaseFragment
 import org.koitharu.kotatsu.core.ui.widgets.ChipsView
 import org.koitharu.kotatsu.core.util.ext.isAnimationsEnabled
 import org.koitharu.kotatsu.core.util.ext.observe
 import org.koitharu.kotatsu.databinding.FragmentFilterHeaderBinding
 import org.koitharu.kotatsu.filter.ui.model.FilterHeaderModel
-import org.koitharu.kotatsu.filter.ui.tags.TagsCatalogSheet
+import org.koitharu.kotatsu.parsers.model.ContentRating
+import org.koitharu.kotatsu.parsers.model.ContentType
+import org.koitharu.kotatsu.parsers.model.Demographic
+import org.koitharu.kotatsu.parsers.model.MangaState
 import org.koitharu.kotatsu.parsers.model.MangaTag
+import org.koitharu.kotatsu.parsers.model.YEAR_UNKNOWN
+import java.util.Locale
 import javax.inject.Inject
-import com.google.android.material.R as materialR
 
 @AndroidEntryPoint
 class FilterHeaderFragment : BaseFragment<FragmentFilterHeaderBinding>(), ChipsView.OnChipClickListener,
@@ -50,13 +54,20 @@ class FilterHeaderFragment : BaseFragment<FragmentFilterHeaderBinding>(), ChipsV
 		when (data) {
 			is MangaTag -> filter.toggleTag(data, !chip.isChecked)
 			is String -> Unit
-			null -> TagsCatalogSheet.show(parentFragmentManager, isExcludeTag = false)
+			null -> router.showTagsCatalogSheet(excludeMode = false)
 		}
 	}
 
 	override fun onChipCloseClick(chip: Chip, data: Any?) {
 		when (data) {
 			is String -> filter.setQuery(null)
+			is ContentRating -> filter.toggleContentRating(data, false)
+			is Demographic -> filter.toggleDemographic(data, false)
+			is ContentType -> filter.toggleContentType(data, false)
+			is MangaState -> filter.toggleState(data, false)
+			is Locale -> filter.setLocale(null)
+			is Int -> filter.setYear(YEAR_UNKNOWN)
+			is IntRange -> filter.setYearRange(YEAR_UNKNOWN, YEAR_UNKNOWN)
 		}
 	}
 
@@ -68,17 +79,12 @@ class FilterHeaderFragment : BaseFragment<FragmentFilterHeaderBinding>(), ChipsV
 			binding.root.isVisible = false
 			return
 		}
+		binding.chipsTags.setChips(header.chips)
+		binding.root.isVisible = true
 		if (binding.root.context.isAnimationsEnabled) {
 			binding.scrollView.smoothScrollTo(0, 0)
 		} else {
 			binding.scrollView.scrollTo(0, 0)
 		}
-		binding.chipsTags.setChips(header.chips + moreTagsChip())
-		binding.root.isVisible = true
 	}
-
-	private fun moreTagsChip() = ChipsView.ChipModel(
-		title = getString(R.string.more),
-		icon = materialR.drawable.abc_ic_menu_overflow_material,
-	)
 }

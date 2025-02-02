@@ -5,12 +5,13 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.ActivityManager
 import android.app.ActivityManager.MemoryInfo
-import android.app.ActivityOptions
 import android.app.LocaleConfig
+import android.content.ComponentName
 import android.content.Context
 import android.content.Context.ACTIVITY_SERVICE
 import android.content.Context.POWER_SERVICE
 import android.content.ContextWrapper
+import android.content.Intent
 import android.content.OperationApplicationException
 import android.content.SharedPreferences
 import android.content.SyncResult
@@ -21,14 +22,14 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.net.ConnectivityManager
 import android.os.Build
-import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
-import android.view.View
 import android.view.ViewPropertyAnimator
 import android.view.Window
+import android.webkit.CookieManager
 import android.webkit.WebView
 import androidx.activity.result.ActivityResultLauncher
+import androidx.annotation.CheckResult
 import androidx.annotation.IntegerRes
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
@@ -61,6 +62,7 @@ import okio.use
 import org.json.JSONException
 import org.jsoup.internal.StringUtil.StringJoiner
 import org.koitharu.kotatsu.BuildConfig
+import org.koitharu.kotatsu.main.ui.MainActivity
 import org.koitharu.kotatsu.parsers.util.runCatchingCancellable
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserException
@@ -82,12 +84,14 @@ suspend fun CoroutineWorker.trySetForeground(): Boolean = runCatchingCancellable
 	setForeground(info)
 }.isSuccess
 
+@CheckResult
 fun <I> ActivityResultLauncher<I>.resolve(context: Context, input: I): ResolveInfo? {
 	val pm = context.packageManager
 	val intent = contract.createIntent(context, input)
 	return pm.resolveActivity(intent, 0)
 }
 
+@CheckResult
 fun <I> ActivityResultLauncher<I>.tryLaunch(
 	input: I,
 	options: ActivityOptionsCompat? = null,
@@ -167,7 +171,7 @@ fun Context.getAnimationDuration(@IntegerRes resId: Int): Long {
 }
 
 fun Context.isLowRamDevice(): Boolean {
-	return activityManager?.isLowRamDevice ?: false
+	return activityManager?.isLowRamDevice == true
 }
 
 fun Context.isPowerSaveMode(): Boolean {
@@ -180,18 +184,6 @@ val Context.ramAvailable: Long
 		activityManager?.getMemoryInfo(result)
 		return result.availMem
 	}
-
-fun scaleUpActivityOptionsOf(view: View): Bundle? = if (view.context.isAnimationsEnabled) {
-	ActivityOptions.makeScaleUpAnimation(
-		view,
-		0,
-		0,
-		view.width,
-		view.height,
-	).toBundle()
-} else {
-	null
-}
 
 @SuppressLint("DiscouragedApi")
 fun Context.getLocalesConfig(): LocaleListCompat {
@@ -273,4 +265,14 @@ fun WebView.configureForParser(userAgentOverride: String?) = with(settings) {
 	if (userAgentOverride != null) {
 		userAgentString = userAgentOverride
 	}
+	val cookieManager = CookieManager.getInstance()
+	cookieManager.setAcceptCookie(true)
+	cookieManager.setAcceptThirdPartyCookies(this@configureForParser, true)
+}
+
+fun Context.restartApplication() {
+	val activity = findActivity()
+	val intent = Intent.makeRestartActivityTask(ComponentName(this, MainActivity::class.java))
+	startActivity(intent)
+	activity?.finishAndRemoveTask()
 }

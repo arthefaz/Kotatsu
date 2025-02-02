@@ -2,12 +2,16 @@ package org.koitharu.kotatsu.filter.ui
 
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import org.koitharu.kotatsu.R
+import org.koitharu.kotatsu.core.model.titleResId
 import org.koitharu.kotatsu.core.ui.widgets.ChipsView
 import org.koitharu.kotatsu.filter.ui.model.FilterHeaderModel
 import org.koitharu.kotatsu.filter.ui.model.FilterProperty
+import org.koitharu.kotatsu.parsers.model.MangaListFilter
 import org.koitharu.kotatsu.parsers.model.MangaListFilterCapabilities
 import org.koitharu.kotatsu.parsers.model.MangaSource
 import org.koitharu.kotatsu.parsers.model.MangaTag
+import org.koitharu.kotatsu.parsers.util.toTitleCase
 import org.koitharu.kotatsu.search.domain.MangaSearchRepository
 import javax.inject.Inject
 import com.google.android.material.R as materialR
@@ -17,15 +21,14 @@ class FilterHeaderProducer @Inject constructor(
 ) {
 
 	fun observeHeader(filterCoordinator: FilterCoordinator): Flow<FilterHeaderModel> {
-		return combine(filterCoordinator.tags, filterCoordinator.query) { tags, query ->
-			createChipsList(
+		return combine(filterCoordinator.tags, filterCoordinator.observe()) { tags, snapshot ->
+			val chipList = createChipsList(
 				source = filterCoordinator.mangaSource,
 				capabilities = filterCoordinator.capabilities,
-				property = tags,
-				query = query,
+				tagsProperty = tags,
+				snapshot = snapshot.listFilter,
 				limit = 8,
 			)
-		}.combine(filterCoordinator.observe()) { chipList, snapshot ->
 			FilterHeaderModel(
 				chips = chipList,
 				sortOrder = snapshot.sortOrder,
@@ -37,20 +40,20 @@ class FilterHeaderProducer @Inject constructor(
 	private suspend fun createChipsList(
 		source: MangaSource,
 		capabilities: MangaListFilterCapabilities,
-		property: FilterProperty<MangaTag>,
-		query: String?,
+		tagsProperty: FilterProperty<MangaTag>,
+		snapshot: MangaListFilter,
 		limit: Int,
 	): List<ChipsView.ChipModel> {
 		val result = ArrayDeque<ChipsView.ChipModel>(limit + 3)
-		if (query.isNullOrEmpty() || capabilities.isSearchWithFiltersSupported) {
-			val selectedTags = property.selectedItems.toMutableSet()
+		if (snapshot.query.isNullOrEmpty() || capabilities.isSearchWithFiltersSupported) {
+			val selectedTags = tagsProperty.selectedItems.toMutableSet()
 			var tags = if (selectedTags.isEmpty()) {
 				searchRepository.getTagsSuggestion("", limit, source)
 			} else {
 				searchRepository.getTagsSuggestion(selectedTags).take(limit)
 			}
 			if (tags.size < limit) {
-				tags = tags + property.availableItems.take(limit - tags.size)
+				tags = tags + tagsProperty.availableItems.take(limit - tags.size)
 			}
 			if (tags.isEmpty() && selectedTags.isEmpty()) {
 				return emptyList()
@@ -76,16 +79,71 @@ class FilterHeaderProducer @Inject constructor(
 				result.addFirst(model)
 			}
 		}
-		if (!query.isNullOrEmpty()) {
+		snapshot.locale?.let {
 			result.addFirst(
 				ChipsView.ChipModel(
-					title = query,
-					icon = materialR.drawable.abc_ic_search_api_material,
+					title = it.getDisplayName(it).toTitleCase(it),
+					icon = R.drawable.ic_language,
 					isCloseable = true,
-					data = query,
+					data = it,
 				),
 			)
 		}
+		snapshot.types.forEach {
+			result.addFirst(
+				ChipsView.ChipModel(
+					titleResId = it.titleResId,
+					isCloseable = true,
+					data = it,
+				),
+			)
+		}
+		snapshot.demographics.forEach {
+			result.addFirst(
+				ChipsView.ChipModel(
+					titleResId = it.titleResId,
+					isCloseable = true,
+					data = it,
+				),
+			)
+		}
+		snapshot.contentRating.forEach {
+			result.addFirst(
+				ChipsView.ChipModel(
+					titleResId = it.titleResId,
+					isCloseable = true,
+					data = it,
+				),
+			)
+		}
+		snapshot.states.forEach {
+			result.addFirst(
+				ChipsView.ChipModel(
+					titleResId = it.titleResId,
+					isCloseable = true,
+					data = it,
+				),
+			)
+		}
+		if (!snapshot.query.isNullOrEmpty()) {
+			result.addFirst(
+				ChipsView.ChipModel(
+					title = snapshot.query,
+					icon = materialR.drawable.abc_ic_search_api_material,
+					isCloseable = true,
+					data = snapshot.query,
+				),
+			)
+		}
+		val hasTags = result.any { it.data is MangaTag }
+		if (hasTags) {
+			result.addLast(moreTagsChip())
+		}
 		return result
 	}
+
+	private fun moreTagsChip() = ChipsView.ChipModel(
+		titleResId = R.string.more,
+		isDropdown = true,
+	)
 }

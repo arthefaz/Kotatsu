@@ -1,7 +1,5 @@
 package org.koitharu.kotatsu.reader.ui.pager.webtoon
 
-import android.graphics.Rect
-import android.net.Uri
 import android.view.View
 import androidx.core.view.isVisible
 import androidx.lifecycle.LifecycleOwner
@@ -11,6 +9,7 @@ import org.koitharu.kotatsu.core.exceptions.resolve.ExceptionResolver
 import org.koitharu.kotatsu.core.os.NetworkState
 import org.koitharu.kotatsu.core.util.GoneOnInvisibleListener
 import org.koitharu.kotatsu.core.util.ext.getDisplayMessage
+import org.koitharu.kotatsu.core.util.ext.isSerializable
 import org.koitharu.kotatsu.databinding.ItemPageWebtoonBinding
 import org.koitharu.kotatsu.parsers.util.ifZero
 import org.koitharu.kotatsu.reader.domain.PageLoader
@@ -90,11 +89,7 @@ class WebtoonHolder(
 		}
 	}
 
-	override fun onImageReady(uri: Uri, bounds: Rect?) {
-		val source = ImageSource.Uri(uri)
-		if (bounds != null) {
-			source.region(bounds)
-		}
+	override fun onImageReady(source: ImageSource) {
 		binding.ssiv.setImage(source)
 	}
 
@@ -116,6 +111,10 @@ class WebtoonHolder(
 		bindingInfo.progressBar.hide()
 	}
 
+	override fun onTrimMemory() {
+		// TODO
+	}
+
 	override fun onClick(v: View) {
 		when (v.id) {
 			R.id.button_retry -> delegate.retry(boundData?.toMangaPage() ?: return, isFromUser = true)
@@ -128,6 +127,7 @@ class WebtoonHolder(
 		bindingInfo.buttonRetry.setText(
 			ExceptionResolver.getResolveStringId(e).ifZero { R.string.try_again },
 		)
+		bindingInfo.buttonErrorDetails.isVisible = e.isSerializable()
 		bindingInfo.layoutError.isVisible = true
 		bindingInfo.progressBar.hide()
 	}

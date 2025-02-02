@@ -2,8 +2,6 @@ package org.koitharu.kotatsu.reader.ui.pager.standard
 
 import android.annotation.SuppressLint
 import android.graphics.PointF
-import android.graphics.Rect
-import android.net.Uri
 import android.view.View
 import android.view.animation.DecelerateInterpolator
 import androidx.core.view.isVisible
@@ -17,6 +15,7 @@ import org.koitharu.kotatsu.core.os.NetworkState
 import org.koitharu.kotatsu.core.ui.widgets.ZoomControl
 import org.koitharu.kotatsu.core.util.ext.getDisplayMessage
 import org.koitharu.kotatsu.core.util.ext.isLowRamDevice
+import org.koitharu.kotatsu.core.util.ext.isSerializable
 import org.koitharu.kotatsu.databinding.ItemPageBinding
 import org.koitharu.kotatsu.parsers.util.ifZero
 import org.koitharu.kotatsu.reader.domain.PageLoader
@@ -90,11 +89,7 @@ open class PageHolder(
 		}
 	}
 
-	override fun onImageReady(uri: Uri, bounds: Rect?) {
-		val source = ImageSource.Uri(uri)
-		if (bounds != null) {
-			source.region(bounds)
-		}
+	override fun onImageReady(source: ImageSource) {
 		binding.ssiv.setImage(source)
 	}
 
@@ -142,6 +137,10 @@ open class PageHolder(
 		bindingInfo.progressBar.hide()
 	}
 
+	override fun onTrimMemory() {
+		// TODO https://developer.android.com/topic/performance/memory
+	}
+
 	final override fun onClick(v: View) {
 		when (v.id) {
 			R.id.button_retry -> delegate.retry(boundData?.toMangaPage() ?: return, isFromUser = true)
@@ -154,6 +153,7 @@ open class PageHolder(
 		bindingInfo.buttonRetry.setText(
 			ExceptionResolver.getResolveStringId(e).ifZero { R.string.try_again },
 		)
+		bindingInfo.buttonErrorDetails.isVisible = e.isSerializable()
 		bindingInfo.layoutError.isVisible = true
 		bindingInfo.progressBar.hide()
 	}

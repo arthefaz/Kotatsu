@@ -7,18 +7,16 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
 import androidx.appcompat.widget.SearchView
-import androidx.fragment.app.FragmentManager
 import androidx.fragment.app.viewModels
 import androidx.recyclerview.widget.AsyncListDiffer
 import androidx.recyclerview.widget.RecyclerView.NO_ID
-import coil.ImageLoader
+import coil3.ImageLoader
 import com.google.android.material.tabs.TabLayout
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import org.koitharu.kotatsu.R
 import org.koitharu.kotatsu.core.exceptions.resolve.ExceptionResolver
-import org.koitharu.kotatsu.core.model.parcelable.ParcelableManga
-import org.koitharu.kotatsu.core.parser.MangaIntent
+import org.koitharu.kotatsu.core.nav.AppRouter
 import org.koitharu.kotatsu.core.ui.list.OnListItemClickListener
 import org.koitharu.kotatsu.core.ui.list.PaginationScrollListener
 import org.koitharu.kotatsu.core.ui.sheet.BaseAdaptiveSheet
@@ -31,15 +29,12 @@ import org.koitharu.kotatsu.core.util.ext.observeEvent
 import org.koitharu.kotatsu.core.util.ext.setProgressIcon
 import org.koitharu.kotatsu.core.util.ext.setTabsEnabled
 import org.koitharu.kotatsu.core.util.ext.viewLifecycleScope
-import org.koitharu.kotatsu.core.util.ext.withArgs
 import org.koitharu.kotatsu.databinding.SheetScrobblingSelectorBinding
 import org.koitharu.kotatsu.list.ui.adapter.ListStateHolderListener
 import org.koitharu.kotatsu.list.ui.adapter.TypedListSpacingDecoration
 import org.koitharu.kotatsu.list.ui.model.ListModel
 import org.koitharu.kotatsu.list.ui.model.LoadingFooter
-import org.koitharu.kotatsu.parsers.model.Manga
 import org.koitharu.kotatsu.scrobbling.common.domain.model.ScrobblerManga
-import org.koitharu.kotatsu.scrobbling.common.domain.model.ScrobblerService
 import org.koitharu.kotatsu.scrobbling.common.ui.selector.adapter.ScrobblerMangaSelectionDecoration
 import org.koitharu.kotatsu.scrobbling.common.ui.selector.adapter.ScrobblerSelectorAdapter
 import javax.inject.Inject
@@ -60,7 +55,7 @@ class ScrobblingSelectorSheet :
 	lateinit var coil: ImageLoader
 
 	private var collapsibleActionViewCallback: CollapseActionViewCallback? = null
-
+	private var paginationScrollListener: PaginationScrollListener? = null
 	private val viewModel by viewModels<ScrobblingSelectorViewModel>()
 
 	override fun onCreateViewBinding(inflater: LayoutInflater, container: ViewGroup?): SheetScrobblingSelectorBinding {
@@ -77,7 +72,11 @@ class ScrobblingSelectorSheet :
 			adapter = listAdapter
 			addItemDecoration(decoration)
 			addItemDecoration(TypedListSpacingDecoration(context, false))
-			addOnScrollListener(PaginationScrollListener(4, this@ScrobblingSelectorSheet))
+			addOnScrollListener(
+				PaginationScrollListener(4, this@ScrobblingSelectorSheet).also {
+					paginationScrollListener = it
+				},
+			)
 		}
 		binding.buttonDone.setOnClickListener(this)
 		initOptionsMenu()
@@ -112,6 +111,7 @@ class ScrobblingSelectorSheet :
 	override fun onDestroyView() {
 		super.onDestroyView()
 		collapsibleActionViewCallback = null
+		paginationScrollListener = null
 	}
 
 	override fun onCurrentListChanged(previousList: MutableList<ListModel>, currentList: MutableList<ListModel>) {
@@ -124,6 +124,7 @@ class ScrobblingSelectorSheet :
 				currentList.indexOfFirst { it is ScrobblerManga && it.id == selectedId }.coerceAtLeast(0)
 			}
 			rv.post(RecyclerViewScrollCallback(rv, target, if (target == 0) 0 else rv.height / 3))
+			paginationScrollListener?.postInvalidate(rv)
 		}
 	}
 
@@ -223,7 +224,7 @@ class ScrobblingSelectorSheet :
 	private fun initTabs() {
 		val entries = viewModel.availableScrobblers
 		val tabs = requireViewBinding().tabs
-		val selectedId = arguments?.getInt(ARG_SCROBBLER, -1) ?: -1
+		val selectedId = arguments?.getInt(AppRouter.KEY_ID, -1) ?: -1
 		tabs.removeAllTabs()
 		tabs.clearOnTabSelectedListeners()
 		tabs.addOnTabSelectedListener(this)
@@ -237,19 +238,5 @@ class ScrobblingSelectorSheet :
 				tab.select()
 			}
 		}
-	}
-
-	companion object {
-
-		private const val TAG = "ScrobblingSelectorBottomSheet"
-		private const val ARG_SCROBBLER = "scrobbler"
-
-		fun show(fm: FragmentManager, manga: Manga, scrobblerService: ScrobblerService?) =
-			ScrobblingSelectorSheet().withArgs(2) {
-				putParcelable(MangaIntent.KEY_MANGA, ParcelableManga(manga))
-				if (scrobblerService != null) {
-					putInt(ARG_SCROBBLER, scrobblerService.id)
-				}
-			}.show(fm, TAG)
 	}
 }

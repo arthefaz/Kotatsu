@@ -1,7 +1,7 @@
 package org.koitharu.kotatsu.settings
 
-import android.content.Intent
 import android.content.SharedPreferences
+import android.content.pm.ActivityInfo
 import android.os.Bundle
 import android.view.View
 import androidx.preference.ListPreference
@@ -10,6 +10,7 @@ import androidx.preference.Preference
 import dagger.hilt.android.AndroidEntryPoint
 import org.koitharu.kotatsu.R
 import org.koitharu.kotatsu.core.model.ZoomMode
+import org.koitharu.kotatsu.core.nav.router
 import org.koitharu.kotatsu.core.prefs.AppSettings
 import org.koitharu.kotatsu.core.prefs.ReaderAnimation
 import org.koitharu.kotatsu.core.prefs.ReaderBackground
@@ -17,7 +18,6 @@ import org.koitharu.kotatsu.core.prefs.ReaderMode
 import org.koitharu.kotatsu.core.ui.BasePreferenceFragment
 import org.koitharu.kotatsu.core.util.ext.setDefaultValueCompat
 import org.koitharu.kotatsu.parsers.util.names
-import org.koitharu.kotatsu.settings.reader.ReaderTapGridConfigActivity
 import org.koitharu.kotatsu.settings.utils.MultiSummaryProvider
 import org.koitharu.kotatsu.settings.utils.PercentSummaryProvider
 import org.koitharu.kotatsu.settings.utils.SliderPreference
@@ -37,6 +37,15 @@ class ReaderSettingsFragment :
 				ReaderMode.WEBTOON.name,
 			)
 			setDefaultValueCompat(ReaderMode.STANDARD.name)
+		}
+		findPreference<ListPreference>(AppSettings.KEY_READER_ORIENTATION)?.run {
+			entryValues = arrayOf(
+				ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED.toString(),
+				ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR.toString(),
+				ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT.toString(),
+				ActivityInfo.SCREEN_ORIENTATION_USER_LANDSCAPE.toString(),
+			)
+			setDefaultValueCompat(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED.toString())
 		}
 		findPreference<ListPreference>(AppSettings.KEY_READER_BACKGROUND)?.run {
 			entryValues = ReaderBackground.entries.names()
@@ -70,7 +79,7 @@ class ReaderSettingsFragment :
 	override fun onPreferenceTreeClick(preference: Preference): Boolean {
 		return when (preference.key) {
 			AppSettings.KEY_READER_TAP_ACTIONS -> {
-				startActivity(Intent(preference.context, ReaderTapGridConfigActivity::class.java))
+				router.openReaderTapGridSettings()
 				true
 			}
 

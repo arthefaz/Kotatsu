@@ -46,7 +46,7 @@
 		android:allowBackup="true"
 		android:backupAgent="org.koitharu.kotatsu.settings.backup.AppBackupAgent"
 		android:dataExtractionRules="@xml/backup_rules"
-		android:enableOnBackInvokedCallback="true"
+		android:enableOnBackInvokedCallback="@bool/is_predictive_back_enabled"
 		android:fullBackupContent="@xml/backup_content"
 		android:fullBackupOnly="true"
 		android:icon="@mipmap/ic_launcher"
@@ -209,6 +209,7 @@
 		<activity android:name="org.koitharu.kotatsu.favourites.ui.categories.edit.FavouritesCategoryEditActivity" />
 		<activity
 			android:name="org.koitharu.kotatsu.sync.ui.SyncAuthActivity"
+			android:exported="true"
 			android:label="@string/sync" />
 		<activity
 			android:name="org.koitharu.kotatsu.reader.ui.colorfilter.ColorFilterConfigActivity"
@@ -266,19 +267,30 @@
 			tools:node="merge" />
 		<service
 			android:name="org.koitharu.kotatsu.local.ui.LocalChaptersRemoveService"
-			android:foregroundServiceType="dataSync" />
+			android:foregroundServiceType="dataSync"
+			android:label="@string/local_manga_processing" />
 		<service
-			android:name="org.koitharu.kotatsu.local.ui.ImportService"
-			android:foregroundServiceType="dataSync" />
+			android:name="org.koitharu.kotatsu.settings.backup.PeriodicalBackupService"
+			android:foregroundServiceType="dataSync"
+			android:label="@string/periodic_backups" />
 		<service
 			android:name="org.koitharu.kotatsu.alternatives.ui.AutoFixService"
-			android:foregroundServiceType="dataSync" />
-		<service android:name="org.koitharu.kotatsu.local.ui.LocalIndexUpdateService" />
+			android:foregroundServiceType="dataSync"
+			android:label="@string/fixing_manga" />
+		<service
+			android:name="org.koitharu.kotatsu.local.ui.LocalIndexUpdateService"
+			android:label="@string/local_manga_processing" />
+		<service
+			android:name="org.koitharu.kotatsu.local.ui.ImportService"
+			android:foregroundServiceType="dataSync"
+			android:label="@string/importing_manga" />
 		<service
 			android:name="org.koitharu.kotatsu.widget.shelf.ShelfWidgetService"
+			android:label="@string/manga_shelf"
 			android:permission="android.permission.BIND_REMOTEVIEWS" />
 		<service
 			android:name="org.koitharu.kotatsu.widget.recent.RecentWidgetService"
+			android:label="@string/recent_manga"
 			android:permission="android.permission.BIND_REMOTEVIEWS" />
 		<service
 			android:name="org.koitharu.kotatsu.sync.ui.SyncAuthenticatorService"
@@ -315,7 +327,8 @@
 		</service>
 		<service
 			android:name="org.koitharu.kotatsu.details.service.MangaPrefetchService"
-			android:exported="false" />
+			android:exported="false"
+			android:label="@string/prefetch_content" />
 
 		<provider
 			android:name="org.koitharu.kotatsu.search.ui.MangaSuggestionsProvider"
@@ -394,7 +407,7 @@
 			android:value="@bool/com_samsung_android_icon_container_has_icon_container" />
 
 		<activity-alias
-			android:name="org.koitharu.kotatsu.details.ui.DetailsBYLinkActivity"
+			android:name="org.koitharu.kotatsu.details.ui.DetailsByLinkActivity"
 			android:exported="true"
 			android:targetActivity="org.koitharu.kotatsu.details.ui.DetailsActivity">
 

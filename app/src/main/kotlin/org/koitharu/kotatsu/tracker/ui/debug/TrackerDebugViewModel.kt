@@ -16,7 +16,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class TrackerDebugViewModel @Inject constructor(
-	private val db: MangaDatabase
+	db: MangaDatabase
 ) : BaseViewModel() {
 
 	val content = db.getTracksDao().observeAll()
@@ -25,7 +25,7 @@ class TrackerDebugViewModel @Inject constructor(
 
 	private fun List<TrackWithManga>.toUiList(): List<TrackDebugItem> = map {
 		TrackDebugItem(
-			manga = it.manga.toManga(emptySet()),
+			manga = it.manga.toManga(emptySet(), null),
 			lastChapterId = it.track.lastChapterId,
 			newChapters = it.track.newChapters,
 			lastCheckTime = it.track.lastCheckTime.toInstantOrNull(),

@@ -9,31 +9,34 @@ import androidx.core.graphics.Insets
 import androidx.core.text.method.LinkMovementMethodCompat
 import androidx.core.view.isVisible
 import androidx.fragment.app.viewModels
-import coil.ImageLoader
-import coil.request.ImageRequest
-import coil.request.SuccessResult
-import coil.util.CoilUtils
+import coil3.ImageLoader
+import coil3.request.ImageRequest
+import coil3.request.SuccessResult
+import coil3.request.error
+import coil3.request.fallback
+import coil3.request.lifecycle
+import coil3.request.placeholder
+import coil3.request.target
+import coil3.util.CoilUtils
 import com.google.android.material.chip.Chip
 import dagger.hilt.android.AndroidEntryPoint
 import org.koitharu.kotatsu.R
+import org.koitharu.kotatsu.core.nav.router
 import org.koitharu.kotatsu.core.ui.BaseFragment
 import org.koitharu.kotatsu.core.ui.image.CoverSizeResolver
 import org.koitharu.kotatsu.core.ui.widgets.ChipsView
 import org.koitharu.kotatsu.core.util.ext.crossfade
 import org.koitharu.kotatsu.core.util.ext.defaultPlaceholders
+import org.koitharu.kotatsu.core.util.ext.drawable
 import org.koitharu.kotatsu.core.util.ext.enqueueWith
-import org.koitharu.kotatsu.core.util.ext.ifNullOrEmpty
+import org.koitharu.kotatsu.core.util.ext.mangaSourceExtra
 import org.koitharu.kotatsu.core.util.ext.observe
-import org.koitharu.kotatsu.core.util.ext.scaleUpActivityOptionsOf
 import org.koitharu.kotatsu.core.util.ext.textAndVisible
 import org.koitharu.kotatsu.databinding.FragmentPreviewBinding
-import org.koitharu.kotatsu.details.ui.DetailsActivity
 import org.koitharu.kotatsu.filter.ui.FilterCoordinator
-import org.koitharu.kotatsu.image.ui.ImageActivity
 import org.koitharu.kotatsu.parsers.model.Manga
-import org.koitharu.kotatsu.parsers.model.MangaListFilter
 import org.koitharu.kotatsu.parsers.model.MangaTag
-import org.koitharu.kotatsu.reader.ui.ReaderActivity
+import org.koitharu.kotatsu.parsers.util.ifNullOrEmpty
 import org.koitharu.kotatsu.search.ui.MangaListActivity
 import javax.inject.Inject
 
@@ -70,33 +73,18 @@ class PreviewFragment : BaseFragment<FragmentPreviewBinding>(), View.OnClickList
 		val manga = viewModel.manga.value
 		when (v.id) {
 			R.id.button_close -> closeSelf()
-			R.id.button_open -> startActivity(
-				DetailsActivity.newIntent(v.context, manga),
+			R.id.button_open -> router.openDetails(manga)
+			R.id.button_read -> router.openReader(manga)
+
+			R.id.textView_author -> router.openSearch(
+				source = manga.source,
+				query = manga.author ?: return,
 			)
 
-			R.id.button_read -> {
-				startActivity(
-					ReaderActivity.IntentBuilder(v.context)
-						.manga(manga)
-						.build(),
-				)
-			}
-
-			R.id.textView_author -> startActivity(
-				MangaListActivity.newIntent(
-					context = v.context,
-					source = manga.source,
-					filter = MangaListFilter(query = manga.author),
-				),
-			)
-
-			R.id.imageView_cover -> startActivity(
-				ImageActivity.newIntent(
-					v.context,
-					manga.largeCoverUrl.ifNullOrEmpty { manga.coverUrl },
-					manga.source,
-				),
-				scaleUpActivityOptionsOf(v),
+			R.id.imageView_cover -> router.openImage(
+				url = manga.largeCoverUrl.ifNullOrEmpty { manga.coverUrl } ?: return,
+				source = manga.source,
+				anchor = v,
 			)
 		}
 	}
@@ -107,7 +95,7 @@ class PreviewFragment : BaseFragment<FragmentPreviewBinding>(), View.OnClickList
 		val tag = data as? MangaTag ?: return
 		val filter = (activity as? FilterCoordinator.Owner)?.filterCoordinator
 		if (filter == null) {
-			startActivity(MangaListActivity.newIntent(chip.context, tag.source, MangaListFilter(tags = setOf(tag))))
+			router.openList(tag)
 		} else {
 			filter.toggleTag(tag, true)
 			closeSelf()
@@ -169,7 +157,7 @@ class PreviewFragment : BaseFragment<FragmentPreviewBinding>(), View.OnClickList
 			.target(requireViewBinding().imageViewCover)
 			.size(CoverSizeResolver(requireViewBinding().imageViewCover))
 			.data(imageUrl)
-			.tag(manga.source)
+			.mangaSourceExtra(manga.source)
 			.crossfade(requireContext())
 			.lifecycle(viewLifecycleOwner)
 			.placeholderMemoryCacheKey(manga.coverUrl)

@@ -1,7 +1,5 @@
 package org.koitharu.kotatsu.image.ui
 
-import android.content.Context
-import android.content.Intent
 import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Bundle
@@ -13,12 +11,15 @@ import androidx.core.graphics.drawable.toBitmap
 import androidx.core.view.isVisible
 import androidx.core.view.updateLayoutParams
 import androidx.swiperefreshlayout.widget.CircularProgressDrawable
-import coil.ImageLoader
-import coil.request.CachePolicy
-import coil.request.ErrorResult
-import coil.request.ImageRequest
-import coil.request.SuccessResult
-import coil.target.ViewTarget
+import coil3.Image
+import coil3.ImageLoader
+import coil3.asDrawable
+import coil3.request.CachePolicy
+import coil3.request.ErrorResult
+import coil3.request.ImageRequest
+import coil3.request.SuccessResult
+import coil3.request.lifecycle
+import coil3.target.ViewTarget
 import com.davemorrissey.labs.subscaleview.ImageSource
 import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
 import com.google.android.material.snackbar.Snackbar
@@ -26,6 +27,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import org.koitharu.kotatsu.R
 import org.koitharu.kotatsu.core.exceptions.resolve.SnackbarErrorObserver
 import org.koitharu.kotatsu.core.model.MangaSource
+import org.koitharu.kotatsu.core.nav.AppRouter
 import org.koitharu.kotatsu.core.ui.BaseActivity
 import org.koitharu.kotatsu.core.ui.util.PopupMenuMediator
 import org.koitharu.kotatsu.core.util.ShareHelper
@@ -33,12 +35,11 @@ import org.koitharu.kotatsu.core.util.ext.enqueueWith
 import org.koitharu.kotatsu.core.util.ext.getDisplayIcon
 import org.koitharu.kotatsu.core.util.ext.getDisplayMessage
 import org.koitharu.kotatsu.core.util.ext.getThemeColor
+import org.koitharu.kotatsu.core.util.ext.mangaSourceExtra
 import org.koitharu.kotatsu.core.util.ext.observe
 import org.koitharu.kotatsu.core.util.ext.observeEvent
-import org.koitharu.kotatsu.core.util.ext.source
 import org.koitharu.kotatsu.databinding.ActivityImageBinding
 import org.koitharu.kotatsu.databinding.ItemErrorStateBinding
-import org.koitharu.kotatsu.parsers.model.MangaSource
 import javax.inject.Inject
 import com.google.android.material.R as materialR
 
@@ -120,7 +121,7 @@ class ImageActivity : BaseActivity<ActivityImageBinding>(), ImageRequest.Listene
 			.memoryCachePolicy(CachePolicy.DISABLED)
 			.lifecycle(this)
 			.listener(this)
-			.source(MangaSource(intent.getStringExtra(EXTRA_SOURCE)))
+			.mangaSourceExtra(MangaSource(intent.getStringExtra(AppRouter.KEY_SOURCE)))
 			.target(SsivTarget(viewBinding.ssiv))
 			.enqueueWith(coil)
 	}
@@ -139,7 +140,7 @@ class ImageActivity : BaseActivity<ActivityImageBinding>(), ImageRequest.Listene
 			button.setImageDrawable(
 				CircularProgressDrawable(this).also {
 					it.setStyle(CircularProgressDrawable.LARGE)
-					it.setColorSchemeColors(getThemeColor(com.google.android.material.R.attr.colorControlNormal))
+					it.setColorSchemeColors(getThemeColor(materialR.attr.colorControlNormal))
 					it.start()
 				},
 			)
@@ -152,9 +153,9 @@ class ImageActivity : BaseActivity<ActivityImageBinding>(), ImageRequest.Listene
 		override val view: SubsamplingScaleImageView,
 	) : ViewTarget<SubsamplingScaleImageView> {
 
-		override fun onError(error: Drawable?) = setDrawable(error)
+		override fun onError(error: Image?) = setDrawable(error?.asDrawable(view.resources))
 
-		override fun onSuccess(result: Drawable) = setDrawable(result)
+		override fun onSuccess(result: Image) = setDrawable(result.asDrawable(view.resources))
 
 		override fun equals(other: Any?): Boolean {
 			return (this === other) || (other is SsivTarget && view == other.view)
@@ -166,21 +167,10 @@ class ImageActivity : BaseActivity<ActivityImageBinding>(), ImageRequest.Listene
 
 		private fun setDrawable(drawable: Drawable?) {
 			if (drawable != null) {
-				view.setImage(ImageSource.Bitmap(drawable.toBitmap()))
+				view.setImage(ImageSource.bitmap(drawable.toBitmap()))
 			} else {
 				view.recycle()
 			}
-		}
-	}
-
-	companion object {
-
-		const val EXTRA_SOURCE = "source"
-
-		fun newIntent(context: Context, url: String, source: MangaSource?): Intent {
-			return Intent(context, ImageActivity::class.java)
-				.setData(Uri.parse(url))
-				.putExtra(EXTRA_SOURCE, source?.name)
 		}
 	}
 }

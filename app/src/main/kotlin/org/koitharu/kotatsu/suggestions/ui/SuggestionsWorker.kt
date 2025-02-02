@@ -31,8 +31,8 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.await
 import androidx.work.workDataOf
-import coil.ImageLoader
-import coil.request.ImageRequest
+import coil3.ImageLoader
+import coil3.request.ImageRequest
 import dagger.Reusable
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
@@ -49,21 +49,21 @@ import org.koitharu.kotatsu.browser.cloudflare.CaptchaNotifier
 import org.koitharu.kotatsu.core.exceptions.CloudFlareProtectedException
 import org.koitharu.kotatsu.core.model.distinctById
 import org.koitharu.kotatsu.core.model.isNsfw
+import org.koitharu.kotatsu.core.nav.AppRouter
+import org.koitharu.kotatsu.core.nav.ReaderIntent
 import org.koitharu.kotatsu.core.parser.MangaRepository
 import org.koitharu.kotatsu.core.prefs.AppSettings
-import org.koitharu.kotatsu.core.util.ext.almostEquals
 import org.koitharu.kotatsu.core.util.ext.asArrayList
 import org.koitharu.kotatsu.core.util.ext.awaitUniqueWorkInfoByName
 import org.koitharu.kotatsu.core.util.ext.awaitWorkInfosByTag
 import org.koitharu.kotatsu.core.util.ext.checkNotificationPermission
 import org.koitharu.kotatsu.core.util.ext.flatten
+import org.koitharu.kotatsu.core.util.ext.mangaSourceExtra
 import org.koitharu.kotatsu.core.util.ext.printStackTraceDebug
 import org.koitharu.kotatsu.core.util.ext.sanitize
-import org.koitharu.kotatsu.core.util.ext.sizeOrZero
 import org.koitharu.kotatsu.core.util.ext.takeMostFrequent
 import org.koitharu.kotatsu.core.util.ext.toBitmapOrNull
 import org.koitharu.kotatsu.core.util.ext.trySetForeground
-import org.koitharu.kotatsu.details.ui.DetailsActivity
 import org.koitharu.kotatsu.explore.data.MangaSourcesRepository
 import org.koitharu.kotatsu.favourites.domain.FavouritesRepository
 import org.koitharu.kotatsu.history.data.HistoryRepository
@@ -72,9 +72,9 @@ import org.koitharu.kotatsu.parsers.model.MangaListFilter
 import org.koitharu.kotatsu.parsers.model.MangaSource
 import org.koitharu.kotatsu.parsers.model.MangaTag
 import org.koitharu.kotatsu.parsers.model.SortOrder
+import org.koitharu.kotatsu.parsers.util.almostEquals
 import org.koitharu.kotatsu.parsers.util.runCatchingCancellable
-import org.koitharu.kotatsu.reader.ui.ReaderActivity.IntentBuilder
-import org.koitharu.kotatsu.settings.SettingsActivity
+import org.koitharu.kotatsu.parsers.util.sizeOrZero
 import org.koitharu.kotatsu.settings.work.PeriodicWorkScheduler
 import org.koitharu.kotatsu.suggestions.domain.MangaSuggestion
 import org.koitharu.kotatsu.suggestions.domain.SuggestionRepository
@@ -129,7 +129,7 @@ class SuggestionsWorker @AssistedInject constructor(
 				PendingIntentCompat.getActivity(
 					applicationContext,
 					0,
-					SettingsActivity.newSuggestionsSettingsIntent(applicationContext),
+					AppRouter.suggestionsSettingsIntent(applicationContext),
 					0,
 					false,
 				),
@@ -257,7 +257,7 @@ class SuggestionsWorker @AssistedInject constructor(
 		val list = repository.getList(
 			offset = 0,
 			order = order,
-			filter = MangaListFilter(tags = setOfNotNull(tag))
+			filter = MangaListFilter(tags = setOfNotNull(tag)),
 		).asArrayList()
 		if (appSettings.isSuggestionsExcludeNsfw) {
 			list.removeAll { it.isNsfw }
@@ -296,7 +296,7 @@ class SuggestionsWorker @AssistedInject constructor(
 				coil.execute(
 					ImageRequest.Builder(applicationContext)
 						.data(manga.coverUrl)
-						.tag(manga.source)
+						.mangaSourceExtra(manga.source)
 						.build(),
 				).toBitmapOrNull(),
 			)
@@ -325,7 +325,7 @@ class SuggestionsWorker @AssistedInject constructor(
 				style.setBigContentTitle(title)
 				setStyle(style)
 			}
-			val intent = DetailsActivity.newIntent(applicationContext, manga)
+			val intent = AppRouter.detailsIntent(applicationContext, manga)
 			setContentIntent(
 				PendingIntentCompat.getActivity(
 					applicationContext,
@@ -347,7 +347,7 @@ class SuggestionsWorker @AssistedInject constructor(
 				PendingIntentCompat.getActivity(
 					applicationContext,
 					id + 2,
-					IntentBuilder(applicationContext).manga(manga).build(),
+					ReaderIntent.Builder(applicationContext).manga(manga).build().intent,
 					0,
 					false,
 				),
@@ -359,7 +359,7 @@ class SuggestionsWorker @AssistedInject constructor(
 				PendingIntentCompat.getActivity(
 					applicationContext,
 					0,
-					SuggestionsActivity.newIntent(applicationContext),
+					AppRouter.suggestionsIntent(applicationContext),
 					0,
 					false,
 				),

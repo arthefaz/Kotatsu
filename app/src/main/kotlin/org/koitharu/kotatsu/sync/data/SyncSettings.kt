@@ -4,10 +4,9 @@ import android.accounts.Account
 import android.accounts.AccountManager
 import android.content.Context
 import androidx.annotation.WorkerThread
-import dagger.Reusable
 import dagger.hilt.android.qualifiers.ApplicationContext
 import org.koitharu.kotatsu.R
-import org.koitharu.kotatsu.core.util.ext.ifNullOrEmpty
+import org.koitharu.kotatsu.parsers.util.ifNullOrEmpty
 import javax.inject.Inject
 
 class SyncSettings(
@@ -28,13 +27,9 @@ class SyncSettings(
 
 	@get:WorkerThread
 	@set:WorkerThread
-	var syncURL: String
+	var syncUrl: String
 		get() = account?.let {
-			val sync_url = accountManager.getUserData(it, KEY_SYNC_URL)
-			if ( !sync_url.startsWith("http://") && !sync_url.startsWith("https://") ) {
-				return "http://$sync_url"
-			}
-			return sync_url
+			accountManager.getUserData(it, KEY_SYNC_URL)?.withHttpSchema()
 		}.ifNullOrEmpty { defaultSyncUrl }
 		set(value) {
 			account?.let {
@@ -43,6 +38,12 @@ class SyncSettings(
 		}
 
 	companion object {
+
+		private fun String.withHttpSchema(): String = if (!startsWith("http://") && !startsWith("https://")) {
+			"http://$this"
+		} else {
+			this
+		}
 
 		const val KEY_SYNC_URL = "host"
 	}

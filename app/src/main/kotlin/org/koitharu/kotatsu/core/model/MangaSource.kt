@@ -2,11 +2,16 @@ package org.koitharu.kotatsu.core.model
 
 import android.content.Context
 import android.graphics.Color
+import android.os.Build
 import android.text.SpannableStringBuilder
 import android.text.style.ForegroundColorSpan
+import android.text.style.ImageSpan
 import android.text.style.RelativeSizeSpan
 import android.text.style.SuperscriptSpan
+import android.widget.TextView
+import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
+import androidx.core.content.ContextCompat
 import androidx.core.text.inSpans
 import org.koitharu.kotatsu.R
 import org.koitharu.kotatsu.core.parser.external.ExternalMangaSource
@@ -62,6 +67,10 @@ val ContentType.titleResId
 		ContentType.MANHUA -> R.string.content_type_manhua
 		ContentType.NOVEL -> R.string.content_type_novel
 		ContentType.ONE_SHOT -> R.string.content_type_one_shot
+		ContentType.DOUJINSHI -> R.string.content_type_doujinshi
+		ContentType.IMAGE_SET -> R.string.content_type_image_set
+		ContentType.ARTIST_CG -> R.string.content_type_artist_cg
+		ContentType.GAME_CG -> R.string.content_type_game_cg
 	}
 
 tailrec fun MangaSource.unwrap(): MangaSource = if (this is MangaSourceInfo) {
@@ -95,4 +104,17 @@ fun SpannableStringBuilder.appendNsfwLabel(context: Context) = inSpans(
 	SuperscriptSpan(),
 ) {
 	append(context.getString(R.string.nsfw))
+}
+
+fun SpannableStringBuilder.appendIcon(textView: TextView, @DrawableRes resId: Int): SpannableStringBuilder {
+	val icon = ContextCompat.getDrawable(textView.context, resId) ?: return this
+	icon.setTintList(textView.textColors)
+	val size = textView.lineHeight
+	icon.setBounds(0, 0, size, size)
+	val alignment = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+		ImageSpan.ALIGN_CENTER
+	} else {
+		ImageSpan.ALIGN_BOTTOM
+	}
+	return inSpans(ImageSpan(icon, alignment)) { append(' ') }
 }

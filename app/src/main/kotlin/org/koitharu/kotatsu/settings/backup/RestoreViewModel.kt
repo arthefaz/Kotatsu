@@ -1,8 +1,6 @@
 package org.koitharu.kotatsu.settings.backup
 
-import android.content.ContentResolver
 import android.content.Context
-import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -13,13 +11,13 @@ import org.koitharu.kotatsu.core.backup.BackupEntry
 import org.koitharu.kotatsu.core.backup.BackupRepository
 import org.koitharu.kotatsu.core.backup.BackupZipInput
 import org.koitharu.kotatsu.core.backup.CompositeResult
-import org.koitharu.kotatsu.core.exceptions.BadBackupFormatException
-import org.koitharu.kotatsu.core.exceptions.UnsupportedFileException
+import org.koitharu.kotatsu.core.nav.AppRouter
 import org.koitharu.kotatsu.core.ui.BaseViewModel
 import org.koitharu.kotatsu.core.util.ext.MutableEventFlow
 import org.koitharu.kotatsu.core.util.ext.call
+import org.koitharu.kotatsu.core.util.ext.printStackTraceDebug
 import org.koitharu.kotatsu.core.util.ext.toUriOrNull
-import org.koitharu.kotatsu.parsers.util.SuspendLazy
+import org.koitharu.kotatsu.parsers.util.suspendlazy.suspendLazy
 import java.io.File
 import java.io.FileNotFoundException
 import java.util.Date
@@ -34,8 +32,8 @@ class RestoreViewModel @Inject constructor(
 	@ApplicationContext context: Context,
 ) : BaseViewModel() {
 
-	private val backupInput = SuspendLazy {
-		val uri = savedStateHandle.get<String>(RestoreDialogFragment.ARG_FILE)
+	private val backupInput = suspendLazy {
+		val uri = savedStateHandle.get<String>(AppRouter.KEY_FILE)
 			?.toUriOrNull() ?: throw FileNotFoundException()
 		val contentResolver = context.contentResolver
 		runInterruptible(Dispatchers.IO) {
@@ -75,7 +73,11 @@ class RestoreViewModel @Inject constructor(
 
 	override fun onCleared() {
 		super.onCleared()
-		backupInput.peek()?.cleanupAsync()
+		runCatching {
+			backupInput.peek()?.closeAndDelete()
+		}.onFailure {
+			it.printStackTraceDebug()
+		}
 	}
 
 	fun onItemClick(item: BackupEntryModel) {

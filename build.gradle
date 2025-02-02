@@ -1,26 +1,6 @@
-buildscript {
-	repositories {
-		google()
-		mavenCentral()
-	}
-	dependencies {
-		classpath 'com.android.tools.build:gradle:8.6.0'
-		classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:2.0.20'
-		classpath 'com.google.dagger:hilt-android-gradle-plugin:2.52'
-		classpath 'com.google.devtools.ksp:symbol-processing-gradle-plugin:2.0.20-1.0.25'
-	}
-}
-
-allprojects {
-	repositories {
-		google()
-		mavenCentral()
-		maven {
-			url 'https://jitpack.io'
-		}
-	}
-}
-
-tasks.register('clean', Delete) {
-	delete rootProject.layout.buildDirectory
+plugins {
+	alias(libs.plugins.android.application) apply false
+	alias(libs.plugins.kotlin) apply false
+	alias(libs.plugins.hilt) apply false
+	alias(libs.plugins.ksp) apply false
 }

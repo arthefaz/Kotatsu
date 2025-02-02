@@ -1,7 +1,5 @@
 package org.koitharu.kotatsu.reader.ui.colorfilter
 
-import android.content.Context
-import android.content.Intent
 import android.content.res.Resources
 import android.graphics.Bitmap
 import android.os.Bundle
@@ -12,29 +10,30 @@ import androidx.activity.viewModels
 import androidx.core.graphics.Insets
 import androidx.core.view.updateLayoutParams
 import androidx.core.view.updatePadding
-import coil.ImageLoader
-import coil.request.ImageRequest
-import coil.size.Scale
-import coil.size.ViewSizeResolver
+import coil3.ImageLoader
+import coil3.request.ImageRequest
+import coil3.request.bitmapConfig
+import coil3.request.error
+import coil3.size.Scale
+import coil3.size.ViewSizeResolver
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.slider.LabelFormatter
 import com.google.android.material.slider.Slider
 import dagger.hilt.android.AndroidEntryPoint
 import org.koitharu.kotatsu.R
-import org.koitharu.kotatsu.core.model.parcelable.ParcelableManga
-import org.koitharu.kotatsu.core.model.parcelable.ParcelableMangaPage
 import org.koitharu.kotatsu.core.ui.BaseActivity
 import org.koitharu.kotatsu.core.util.ext.decodeRegion
 import org.koitharu.kotatsu.core.util.ext.enqueueWith
 import org.koitharu.kotatsu.core.util.ext.indicator
+import org.koitharu.kotatsu.core.util.ext.mangaSourceExtra
 import org.koitharu.kotatsu.core.util.ext.observe
 import org.koitharu.kotatsu.core.util.ext.observeEvent
 import org.koitharu.kotatsu.core.util.ext.setChecked
 import org.koitharu.kotatsu.core.util.ext.setValueRounded
 import org.koitharu.kotatsu.databinding.ActivityColorFilterBinding
-import org.koitharu.kotatsu.parsers.model.Manga
 import org.koitharu.kotatsu.parsers.model.MangaPage
 import org.koitharu.kotatsu.parsers.util.format
+import org.koitharu.kotatsu.parsers.util.nullIfEmpty
 import org.koitharu.kotatsu.reader.domain.ReaderColorFilter
 import javax.inject.Inject
 import com.google.android.material.R as materialR
@@ -128,18 +127,18 @@ class ColorFilterConfigActivity :
 	private fun onColorFilterChanged(readerColorFilter: ReaderColorFilter?) {
 		viewBinding.sliderBrightness.setValueRounded(readerColorFilter?.brightness ?: 0f)
 		viewBinding.sliderContrast.setValueRounded(readerColorFilter?.contrast ?: 0f)
-		viewBinding.switchInvert.setChecked(readerColorFilter?.isInverted ?: false, false)
-		viewBinding.switchGrayscale.setChecked(readerColorFilter?.isGrayscale ?: false, false)
+		viewBinding.switchInvert.setChecked(readerColorFilter?.isInverted == true, false)
+		viewBinding.switchGrayscale.setChecked(readerColorFilter?.isGrayscale == true, false)
 		viewBinding.imageViewAfter.colorFilter = readerColorFilter?.toColorFilter()
 	}
 
 	private fun loadPreview(page: MangaPage) {
-		val data: Any = page.preview?.takeUnless { it.isEmpty() } ?: page
+		val data: Any = page.preview?.nullIfEmpty() ?: page
 		ImageRequest.Builder(this@ColorFilterConfigActivity)
 			.data(data)
 			.scale(Scale.FILL)
 			.decodeRegion()
-			.tag(page.source)
+			.mangaSourceExtra(page.source)
 			.bitmapConfig(if (viewModel.is32BitColorsEnabled) Bitmap.Config.ARGB_8888 else Bitmap.Config.RGB_565)
 			.indicator(listOf(viewBinding.progressBefore, viewBinding.progressAfter))
 			.error(R.drawable.ic_error_placeholder)
@@ -164,16 +163,5 @@ class ColorFilterConfigActivity :
 			val percent = ((value + 1f) * 100).format(0)
 			return pattern.format(percent)
 		}
-	}
-
-	companion object {
-
-		const val EXTRA_PAGES = "pages"
-		const val EXTRA_MANGA = "manga_id"
-
-		fun newIntent(context: Context, manga: Manga, page: MangaPage) =
-			Intent(context, ColorFilterConfigActivity::class.java)
-				.putExtra(EXTRA_MANGA, ParcelableManga(manga))
-				.putExtra(EXTRA_PAGES, ParcelableMangaPage(page))
 	}
 }

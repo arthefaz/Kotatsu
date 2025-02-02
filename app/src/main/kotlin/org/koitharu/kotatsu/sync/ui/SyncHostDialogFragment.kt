@@ -13,9 +13,9 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import dagger.hilt.android.AndroidEntryPoint
 import org.koitharu.kotatsu.R
 import org.koitharu.kotatsu.core.ui.AlertDialogFragment
-import org.koitharu.kotatsu.core.util.ext.ifNullOrEmpty
 import org.koitharu.kotatsu.core.util.ext.withArgs
 import org.koitharu.kotatsu.databinding.PreferenceDialogAutocompletetextviewBinding
+import org.koitharu.kotatsu.parsers.util.ifNullOrEmpty
 import org.koitharu.kotatsu.settings.utils.validation.UrlValidator
 import org.koitharu.kotatsu.sync.data.SyncSettings
 import javax.inject.Inject
@@ -52,7 +52,7 @@ class SyncHostDialogFragment : AlertDialogFragment<PreferenceDialogAutocompletet
 		binding.message.setText(R.string.sync_host_description)
 		val entries = binding.root.resources.getStringArray(R.array.sync_url_list)
 		val editText = binding.edit
-		editText.setText(arguments?.getString(KEY_SYNC_URL).ifNullOrEmpty { syncSettings.syncURL })
+		editText.setText(arguments?.getString(KEY_SYNC_URL).ifNullOrEmpty { syncSettings.syncUrl })
 		editText.threshold = 0
 		editText.setAdapter(ArrayAdapter(binding.root.context, android.R.layout.simple_spinner_dropdown_item, entries))
 		binding.dropdown.setOnClickListener {
@@ -69,7 +69,7 @@ class SyncHostDialogFragment : AlertDialogFragment<PreferenceDialogAutocompletet
 				if (!result.startsWith("https://") && !result.startsWith("http://")) {
 					scheme = "http://"
 				}
-				syncSettings.syncURL = "$scheme$result"
+				syncSettings.syncUrl = "$scheme$result"
 				parentFragmentManager.setFragmentResult(REQUEST_KEY, bundleOf(KEY_SYNC_URL to "$scheme$result"))
 			}
 		}

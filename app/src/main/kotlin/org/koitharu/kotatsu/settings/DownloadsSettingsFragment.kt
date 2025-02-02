@@ -15,9 +15,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.koitharu.kotatsu.R
+import org.koitharu.kotatsu.core.nav.router
 import org.koitharu.kotatsu.core.prefs.AppSettings
 import org.koitharu.kotatsu.core.prefs.DownloadFormat
-import org.koitharu.kotatsu.core.prefs.ReaderAnimation
+import org.koitharu.kotatsu.core.prefs.TriStateOption
 import org.koitharu.kotatsu.core.ui.BasePreferenceFragment
 import org.koitharu.kotatsu.core.util.ext.printStackTraceDebug
 import org.koitharu.kotatsu.core.util.ext.resolveFile
@@ -27,8 +28,6 @@ import org.koitharu.kotatsu.core.util.ext.viewLifecycleScope
 import org.koitharu.kotatsu.download.ui.worker.DownloadWorker
 import org.koitharu.kotatsu.local.data.LocalStorageManager
 import org.koitharu.kotatsu.parsers.util.names
-import org.koitharu.kotatsu.settings.storage.MangaDirectorySelectDialog
-import org.koitharu.kotatsu.settings.storage.directories.MangaDirectoriesActivity
 import org.koitharu.kotatsu.settings.utils.DozeHelper
 import javax.inject.Inject
 
@@ -54,6 +53,10 @@ class DownloadsSettingsFragment :
 		findPreference<ListPreference>(AppSettings.KEY_DOWNLOADS_FORMAT)?.run {
 			entryValues = DownloadFormat.entries.names()
 			setDefaultValueCompat(DownloadFormat.AUTOMATIC.name)
+		}
+		findPreference<ListPreference>(AppSettings.KEY_DOWNLOADS_METERED_NETWORK)?.run {
+			entryValues = TriStateOption.entries.names()
+			setDefaultValueCompat(TriStateOption.ASK.name)
 		}
 		dozeHelper.updatePreference()
 	}
@@ -81,7 +84,7 @@ class DownloadsSettingsFragment :
 				findPreference<Preference>(key)?.bindDirectoriesCount()
 			}
 
-			AppSettings.KEY_DOWNLOADS_WIFI -> {
+			AppSettings.KEY_DOWNLOADS_METERED_NETWORK -> {
 				updateDownloadsConstraints()
 			}
 
@@ -94,12 +97,12 @@ class DownloadsSettingsFragment :
 	override fun onPreferenceTreeClick(preference: Preference): Boolean {
 		return when (preference.key) {
 			AppSettings.KEY_LOCAL_STORAGE -> {
-				MangaDirectorySelectDialog.show(childFragmentManager)
+				router.showDirectorySelectDialog()
 				true
 			}
 
 			AppSettings.KEY_LOCAL_MANGA_DIRS -> {
-				startActivity(MangaDirectoriesActivity.newIntent(preference.context))
+				router.openDirectoriesSettings()
 				true
 			}
 
@@ -157,12 +160,17 @@ class DownloadsSettingsFragment :
 	}
 
 	private fun updateDownloadsConstraints() {
-		val preference = findPreference<Preference>(AppSettings.KEY_DOWNLOADS_WIFI)
+		val preference = findPreference<Preference>(AppSettings.KEY_DOWNLOADS_METERED_NETWORK)
 		viewLifecycleScope.launch {
 			try {
 				preference?.isEnabled = false
 				withContext(Dispatchers.Default) {
-					downloadsScheduler.updateConstraints()
+					val option = when (settings.allowDownloadOnMeteredNetwork) {
+						TriStateOption.ENABLED -> true
+						TriStateOption.ASK -> return@withContext
+						TriStateOption.DISABLED -> false
+					}
+					downloadsScheduler.updateConstraints(option)
 				}
 			} catch (e: Exception) {
 				e.printStackTraceDebug()

@@ -11,12 +11,12 @@ import org.koitharu.kotatsu.core.db.MangaDatabase
 import org.koitharu.kotatsu.core.db.entity.toManga
 import org.koitharu.kotatsu.core.db.entity.toMangaTags
 import org.koitharu.kotatsu.core.prefs.AppSettings
-import org.koitharu.kotatsu.core.util.ext.ifZero
 import org.koitharu.kotatsu.core.util.ext.mapItems
 import org.koitharu.kotatsu.core.util.ext.toInstantOrNull
 import org.koitharu.kotatsu.details.domain.ProgressUpdateUseCase
 import org.koitharu.kotatsu.list.domain.ListFilterOption
 import org.koitharu.kotatsu.parsers.model.Manga
+import org.koitharu.kotatsu.parsers.util.ifZero
 import org.koitharu.kotatsu.tracker.data.TrackEntity
 import org.koitharu.kotatsu.tracker.data.TrackLogEntity
 import org.koitharu.kotatsu.tracker.data.toTrackingLogItem
@@ -60,7 +60,7 @@ class TrackingRepository @Inject constructor(
 		return db.getTracksDao().observeUpdatedManga(limit, filterOptions)
 			.mapItems {
 				MangaTracking(
-					manga = it.manga.toManga(it.tags.toMangaTags()),
+					manga = it.manga.toManga(it.tags.toMangaTags(), null),
 					lastChapterId = it.track.lastChapterId,
 					lastCheck = it.track.lastCheckTime.toInstantOrNull(),
 					lastChapterDate = it.track.lastChapterDate.toInstantOrNull(),
@@ -73,7 +73,7 @@ class TrackingRepository @Inject constructor(
 	suspend fun getTracks(offset: Int, limit: Int): List<MangaTracking> {
 		return db.getTracksDao().findAll(offset = offset, limit = limit).map {
 			MangaTracking(
-				manga = it.manga.toManga(emptySet()),
+				manga = it.manga.toManga(emptySet(), null),
 				lastChapterId = it.track.lastChapterId,
 				lastCheck = it.track.lastCheckTime.toInstantOrNull(),
 				lastChapterDate = it.track.lastChapterDate.toInstantOrNull(),
@@ -216,7 +216,6 @@ class TrackingRepository @Inject constructor(
 	}
 
 	private fun TrackEntity.mergeWith(updates: MangaUpdates): TrackEntity {
-		val chapters = updates.manga.chapters.orEmpty()
 		return when (updates) {
 			is MangaUpdates.Failure -> TrackEntity(
 				mangaId = mangaId,
@@ -230,7 +229,7 @@ class TrackingRepository @Inject constructor(
 
 			is MangaUpdates.Success -> TrackEntity(
 				mangaId = mangaId,
-				lastChapterId = chapters.lastOrNull()?.id ?: NO_ID,
+				lastChapterId = updates.manga.getChapters(updates.branch).lastOrNull()?.id ?: NO_ID,
 				newChapters = if (updates.isValid) newChapters + updates.newChapters.size else 0,
 				lastCheckTime = System.currentTimeMillis(),
 				lastChapterDate = updates.lastChapterDate().ifZero { lastChapterDate },

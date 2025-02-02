@@ -10,13 +10,12 @@ import android.provider.OpenableColumns
 import androidx.core.database.getStringOrNull
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runInterruptible
-import okhttp3.internal.closeQuietly
 import org.jetbrains.annotations.Blocking
 import org.koitharu.kotatsu.R
 import org.koitharu.kotatsu.core.fs.FileSequence
+import org.koitharu.kotatsu.core.util.MimeTypes
+import java.io.BufferedReader
 import java.io.File
-import java.io.FileFilter
-import java.io.InputStream
 import java.nio.file.attribute.BasicFileAttributes
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
@@ -36,16 +35,8 @@ fun File.takeIfWriteable() = takeIf { it.exists() && it.canWrite() }
 fun File.isNotEmpty() = length() != 0L
 
 @Blocking
-fun ZipFile.readText(entry: ZipEntry) = getInputStream(entry).bufferedReader().use {
-	it.readText()
-}
-
-@Blocking
-fun ZipFile.getInputStreamOrClose(entry: ZipEntry): InputStream = try {
-	getInputStream(entry)
-} catch (e: Throwable) {
-	closeQuietly()
-	throw e
+fun ZipFile.readText(entry: ZipEntry) = getInputStream(entry).use { output ->
+	output.bufferedReader().use(BufferedReader::readText)
 }
 
 fun File.getStorageName(context: Context): String = runCatching {
@@ -62,7 +53,7 @@ fun File.getStorageName(context: Context): String = runCatching {
 	}
 }.getOrNull() ?: context.getString(R.string.other_storage)
 
-fun Uri.toFileOrNull() = if (scheme == URI_SCHEME_FILE) path?.let(::File) else null
+fun Uri.toFileOrNull() = if (isFileUri()) path?.let(::File) else null
 
 suspend fun File.deleteAwait() = runInterruptible(Dispatchers.IO) {
 	delete() || deleteRecursively()
@@ -87,9 +78,13 @@ suspend fun File.computeSize(): Long = runInterruptible(Dispatchers.IO) {
 	walkCompat(includeDirectories = false).sumOf { it.length() }
 }
 
-fun File.children() = FileSequence(this)
+inline fun <R> File.withChildren(block: (children: Sequence<File>) -> R): R = FileSequence(this).use(block)
 
-fun Sequence<File>.filterWith(filter: FileFilter): Sequence<File> = filter { f -> filter.accept(f) }
+fun FileSequence(dir: File): FileSequence = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+	FileSequence.StreamImpl(dir)
+} else {
+	FileSequence.ListImpl(dir)
+}
 
 val File.creationTime
 	get() = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -112,3 +107,6 @@ fun File.walkCompat(includeDirectories: Boolean): Sequence<File> = if (Build.VER
 	val walk = walk()
 	if (includeDirectories) walk else walk.filter { it.isFile }
 }
+
+val File.normalizedExtension: String?
+	get() = MimeTypes.getNormalizedExtension(name)

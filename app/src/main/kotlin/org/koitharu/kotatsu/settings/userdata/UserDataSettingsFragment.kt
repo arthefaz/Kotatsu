@@ -14,13 +14,13 @@ import androidx.preference.ListPreference
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.Preference
 import androidx.preference.TwoStatePreference
-import androidx.preference.forEach
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.StateFlow
 import org.koitharu.kotatsu.R
 import org.koitharu.kotatsu.core.exceptions.resolve.SnackbarErrorObserver
+import org.koitharu.kotatsu.core.nav.router
 import org.koitharu.kotatsu.core.os.AppShortcutManager
 import org.koitharu.kotatsu.core.prefs.AppSettings
 import org.koitharu.kotatsu.core.prefs.ScreenshotsPolicy
@@ -36,8 +36,6 @@ import org.koitharu.kotatsu.core.util.ext.tryLaunch
 import org.koitharu.kotatsu.local.data.CacheDir
 import org.koitharu.kotatsu.parsers.util.mapToSet
 import org.koitharu.kotatsu.parsers.util.names
-import org.koitharu.kotatsu.settings.backup.BackupDialogFragment
-import org.koitharu.kotatsu.settings.backup.RestoreDialogFragment
 import org.koitharu.kotatsu.settings.protect.ProtectSetupActivity
 import org.koitharu.kotatsu.settings.utils.MultiSummaryProvider
 import javax.inject.Inject
@@ -54,6 +52,7 @@ class UserDataSettingsFragment : BasePreferenceFragment(R.string.data_and_privac
 	lateinit var activityRecreationHandle: ActivityRecreationHandle
 
 	private val viewModel: UserDataSettingsViewModel by viewModels()
+	private val loadingPrefs = HashSet<String>()
 
 	private val backupSelectCall = registerForActivityResult(
 		ActivityResultContracts.OpenDocument(),
@@ -106,8 +105,9 @@ class UserDataSettingsFragment : BasePreferenceFragment(R.string.data_and_privac
 			pref.values = settings.searchSuggestionTypes.mapToSet { it.name }
 		}
 		viewModel.loadingKeys.observe(viewLifecycleOwner) { keys ->
-			preferenceScreen.forEach { pref ->
-				pref.isEnabled = pref.key !in keys
+			loadingPrefs.addAll(keys)
+			loadingPrefs.forEach { prefKey ->
+				findPreference<Preference>(prefKey)?.isEnabled = prefKey !in keys
 			}
 		}
 		viewModel.onError.observeEvent(viewLifecycleOwner, SnackbarErrorObserver(listView, this))
@@ -153,13 +153,18 @@ class UserDataSettingsFragment : BasePreferenceFragment(R.string.data_and_privac
 				true
 			}
 
+			AppSettings.KEY_CLEAR_MANGA_DATA -> {
+				viewModel.clearMangaData()
+				true
+			}
+
 			AppSettings.KEY_UPDATES_FEED_CLEAR -> {
 				viewModel.clearUpdatesFeed()
 				true
 			}
 
 			AppSettings.KEY_BACKUP -> {
-				BackupDialogFragment.show(childFragmentManager)
+				router.showBackupCreateDialog()
 				true
 			}
 
@@ -211,7 +216,7 @@ class UserDataSettingsFragment : BasePreferenceFragment(R.string.data_and_privac
 
 	override fun onActivityResult(result: Uri?) {
 		if (result != null) {
-			RestoreDialogFragment.show(childFragmentManager, result)
+			router.showBackupRestoreDialog(result)
 		}
 	}
 

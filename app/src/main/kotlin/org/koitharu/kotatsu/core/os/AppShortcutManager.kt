@@ -10,10 +10,11 @@ import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
 import androidx.core.graphics.drawable.toBitmap
 import androidx.room.InvalidationTracker
-import coil.ImageLoader
-import coil.request.ImageRequest
-import coil.size.Scale
-import coil.size.Size
+import coil3.ImageLoader
+import coil3.request.ImageRequest
+import coil3.request.transformations
+import coil3.size.Scale
+import coil3.size.Size
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -22,21 +23,21 @@ import kotlinx.coroutines.withContext
 import org.koitharu.kotatsu.R
 import org.koitharu.kotatsu.core.db.TABLE_HISTORY
 import org.koitharu.kotatsu.core.model.getTitle
+import org.koitharu.kotatsu.core.nav.AppRouter
+import org.koitharu.kotatsu.core.nav.ReaderIntent
 import org.koitharu.kotatsu.core.parser.MangaDataRepository
 import org.koitharu.kotatsu.core.parser.favicon.faviconUri
 import org.koitharu.kotatsu.core.prefs.AppSettings
 import org.koitharu.kotatsu.core.ui.image.ThumbnailTransformation
 import org.koitharu.kotatsu.core.util.ext.getDrawableOrThrow
+import org.koitharu.kotatsu.core.util.ext.mangaSourceExtra
 import org.koitharu.kotatsu.core.util.ext.printStackTraceDebug
 import org.koitharu.kotatsu.core.util.ext.processLifecycleScope
-import org.koitharu.kotatsu.core.util.ext.source
 import org.koitharu.kotatsu.history.data.HistoryRepository
 import org.koitharu.kotatsu.parsers.model.Manga
 import org.koitharu.kotatsu.parsers.model.MangaSource
 import org.koitharu.kotatsu.parsers.util.mapNotNullToSet
 import org.koitharu.kotatsu.parsers.util.runCatchingCancellable
-import org.koitharu.kotatsu.reader.ui.ReaderActivity
-import org.koitharu.kotatsu.search.ui.MangaListActivity
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -138,7 +139,7 @@ class AppShortcutManager @Inject constructor(
 				ImageRequest.Builder(context)
 					.data(manga.coverUrl)
 					.size(iconSize)
-					.source(manga.source)
+					.mangaSourceExtra(manga.source)
 					.scale(Scale.FILL)
 					.transformations(ThumbnailTransformation())
 					.build(),
@@ -154,9 +155,10 @@ class AppShortcutManager @Inject constructor(
 			.setIcon(icon)
 			.setLongLived(true)
 			.setIntent(
-				ReaderActivity.IntentBuilder(context)
+				ReaderIntent.Builder(context)
 					.mangaId(manga.id)
-					.build(),
+					.build()
+					.intent,
 			)
 			.build()
 	}
@@ -180,7 +182,7 @@ class AppShortcutManager @Inject constructor(
 			.setLongLabel(title)
 			.setIcon(icon)
 			.setLongLived(true)
-			.setIntent(MangaListActivity.newIntent(context, source, null))
+			.setIntent(AppRouter.listIntent(context, source, null))
 			.build()
 	}
 }

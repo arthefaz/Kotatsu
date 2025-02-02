@@ -1,7 +1,6 @@
 package org.koitharu.kotatsu.reader.domain
 
 import android.content.Context
-import android.graphics.BitmapFactory
 import android.graphics.Rect
 import android.net.Uri
 import androidx.annotation.AnyThread
@@ -28,40 +27,45 @@ import kotlinx.coroutines.sync.withPermit
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okio.use
+import org.jetbrains.annotations.Blocking
+import org.koitharu.kotatsu.core.image.BitmapDecoderCompat
 import org.koitharu.kotatsu.core.network.CommonHeaders
 import org.koitharu.kotatsu.core.network.MangaHttpClient
 import org.koitharu.kotatsu.core.network.imageproxy.ImageProxyInterceptor
+import org.koitharu.kotatsu.core.parser.CachingMangaRepository
 import org.koitharu.kotatsu.core.parser.MangaRepository
-import org.koitharu.kotatsu.core.parser.ParserMangaRepository
 import org.koitharu.kotatsu.core.prefs.AppSettings
 import org.koitharu.kotatsu.core.util.FileSize
+import org.koitharu.kotatsu.core.util.MimeTypes
 import org.koitharu.kotatsu.core.util.RetainedLifecycleCoroutineScope
 import org.koitharu.kotatsu.core.util.ext.URI_SCHEME_ZIP
 import org.koitharu.kotatsu.core.util.ext.cancelChildrenAndJoin
 import org.koitharu.kotatsu.core.util.ext.compressToPNG
 import org.koitharu.kotatsu.core.util.ext.ensureRamAtLeast
 import org.koitharu.kotatsu.core.util.ext.ensureSuccess
-import org.koitharu.kotatsu.core.util.ext.exists
 import org.koitharu.kotatsu.core.util.ext.getCompletionResultOrNull
+import org.koitharu.kotatsu.core.util.ext.isFileUri
+import org.koitharu.kotatsu.core.util.ext.isNotEmpty
 import org.koitharu.kotatsu.core.util.ext.isPowerSaveMode
-import org.koitharu.kotatsu.core.util.ext.isTargetNotEmpty
+import org.koitharu.kotatsu.core.util.ext.isZipUri
 import org.koitharu.kotatsu.core.util.ext.printStackTraceDebug
 import org.koitharu.kotatsu.core.util.ext.ramAvailable
+import org.koitharu.kotatsu.core.util.ext.toMimeType
 import org.koitharu.kotatsu.core.util.ext.use
 import org.koitharu.kotatsu.core.util.ext.withProgress
 import org.koitharu.kotatsu.core.util.progress.ProgressDeferred
+import org.koitharu.kotatsu.download.ui.worker.DownloadSlowdownDispatcher
 import org.koitharu.kotatsu.local.data.PagesCache
-import org.koitharu.kotatsu.local.data.isFileUri
-import org.koitharu.kotatsu.local.data.isZipUri
 import org.koitharu.kotatsu.parsers.model.MangaPage
 import org.koitharu.kotatsu.parsers.model.MangaSource
+import org.koitharu.kotatsu.parsers.util.requireBody
 import org.koitharu.kotatsu.parsers.util.runCatchingCancellable
 import org.koitharu.kotatsu.reader.ui.pager.ReaderPage
+import java.io.File
 import java.util.LinkedList
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.zip.ZipFile
 import javax.inject.Inject
-import kotlin.concurrent.Volatile
 import kotlin.coroutines.AbstractCoroutineContextElement
 import kotlin.coroutines.CoroutineContext
 
@@ -74,6 +78,7 @@ class PageLoader @Inject constructor(
 	private val settings: AppSettings,
 	private val mangaRepositoryFactory: MangaRepository.Factory,
 	private val imageProxyInterceptor: ImageProxyInterceptor,
+	private val downloadSlowdownDispatcher: DownloadSlowdownDispatcher,
 ) {
 
 	val loaderScope = RetainedLifecycleCoroutineScope(lifecycle) + InternalErrorHandler() + Dispatchers.Default
@@ -91,7 +96,7 @@ class PageLoader @Inject constructor(
 	private val edgeDetector = EdgeDetector(context)
 
 	fun isPrefetchApplicable(): Boolean {
-		return repository is ParserMangaRepository
+		return repository is CachingMangaRepository
 			&& settings.isPagesPreloadEnabled
 			&& !context.isPowerSaveMode()
 			&& !isLowRam()
@@ -122,7 +127,7 @@ class PageLoader @Inject constructor(
 		} else if (task?.isCancelled == false) {
 			return task
 		}
-		task = loadPageAsyncImpl(page, force)
+		task = loadPageAsyncImpl(page, skipCache = force, isPrefetch = false)
 		synchronized(tasks) {
 			tasks[page.id] = task
 		}
@@ -139,17 +144,17 @@ class PageLoader @Inject constructor(
 				ZipFile(uri.schemeSpecificPart).use { zip ->
 					val entry = zip.getEntry(uri.fragment)
 					context.ensureRamAtLeast(entry.size * 2)
-					zip.getInputStream(zip.getEntry(uri.fragment)).use {
-						BitmapFactory.decodeStream(it)
+					zip.getInputStream(entry).use {
+						BitmapDecoderCompat.decode(it, MimeTypes.getMimeTypeFromExtension(entry.name))
 					}
 				}
 			}
 			cache.put(uri.toString(), bitmap).toUri()
 		} else {
 			val file = uri.toFile()
-			context.ensureRamAtLeast(file.length() * 2)
 			runInterruptible(Dispatchers.IO) {
-				BitmapFactory.decodeFile(file.absolutePath)
+				context.ensureRamAtLeast(file.length() * 2)
+				BitmapDecoderCompat.decode(file)
 			}.use { image ->
 				image.compressToPNG(file)
 			}
@@ -158,7 +163,7 @@ class PageLoader @Inject constructor(
 	}
 
 	suspend fun getTrimmedBounds(uri: Uri): Rect? = runCatchingCancellable {
-		edgeDetector.getBounds(ImageSource.Uri(uri))
+		edgeDetector.getBounds(ImageSource.uri(uri))
 	}.onFailure { error ->
 		error.printStackTraceDebug()
 	}.getOrNull()
@@ -179,25 +184,28 @@ class PageLoader @Inject constructor(
 		prefetchLock.withLock {
 			while (prefetchQueue.isNotEmpty()) {
 				val page = prefetchQueue.pollFirst() ?: return@launch
-				if (cache.get(page.url) == null) {
-					synchronized(tasks) {
-						tasks[page.id] = loadPageAsyncImpl(page, false)
-					}
-					return@launch
+				synchronized(tasks) {
+					tasks[page.id] = loadPageAsyncImpl(page, skipCache = false, isPrefetch = true)
 				}
 			}
 		}
 	}
 
-	private fun loadPageAsyncImpl(page: MangaPage, skipCache: Boolean): ProgressDeferred<Uri, Float> {
+	private fun loadPageAsyncImpl(
+		page: MangaPage,
+		skipCache: Boolean,
+		isPrefetch: Boolean,
+	): ProgressDeferred<Uri, Float> {
 		val progress = MutableStateFlow(PROGRESS_UNDEFINED)
 		val deferred = loaderScope.async {
-			if (!skipCache) {
-				cache.get(page.url)?.let { return@async it.toUri() }
-			}
 			counter.incrementAndGet()
 			try {
-				loadPageImpl(page, progress)
+				loadPageImpl(
+					page = page,
+					progress = progress,
+					isPrefetch = isPrefetch,
+					skipCache = skipCache,
+				)
 			} finally {
 				if (counter.decrementAndGet() == 0) {
 					onIdle()
@@ -217,9 +225,17 @@ class PageLoader @Inject constructor(
 		}
 	}
 
-	private suspend fun loadPageImpl(page: MangaPage, progress: MutableStateFlow<Float>): Uri = semaphore.withPermit {
+	private suspend fun loadPageImpl(
+		page: MangaPage,
+		progress: MutableStateFlow<Float>,
+		isPrefetch: Boolean,
+		skipCache: Boolean,
+	): Uri = semaphore.withPermit {
 		val pageUrl = getPageUrl(page)
 		check(pageUrl.isNotBlank()) { "Cannot obtain full image url for $page" }
+		if (!skipCache) {
+			cache.get(pageUrl)?.let { return it.toUri() }
+		}
 		val uri = Uri.parse(pageUrl)
 		return when {
 			uri.isZipUri() -> if (uri.scheme == URI_SCHEME_ZIP) {
@@ -230,11 +246,13 @@ class PageLoader @Inject constructor(
 
 			uri.isFileUri() -> uri
 			else -> {
+				if (isPrefetch) {
+					downloadSlowdownDispatcher.delay(page.source)
+				}
 				val request = createPageRequest(pageUrl, page.source)
 				imageProxyInterceptor.interceptPageRequest(request, okHttp).ensureSuccess().use { response ->
-					val body = checkNotNull(response.body) { "Null response body" }
-					body.withProgress(progress).use {
-						cache.put(pageUrl, it.source())
+					response.requireBody().withProgress(progress).use {
+						cache.put(pageUrl, it.source(), it.contentType()?.toMimeType())
 					}
 				}.toUri()
 			}
@@ -248,7 +266,7 @@ class PageLoader @Inject constructor(
 	private fun Deferred<Uri>.isValid(): Boolean {
 		return getCompletionResultOrNull()?.map { uri ->
 			uri.exists() && uri.isTargetNotEmpty()
-		}?.getOrDefault(false) ?: true
+		}?.getOrDefault(false) != false
 	}
 
 	private class InternalErrorHandler : AbstractCoroutineContextElement(CoroutineExceptionHandler),
@@ -272,5 +290,28 @@ class PageLoader @Inject constructor(
 			.cacheControl(CommonHeaders.CACHE_CONTROL_NO_STORE)
 			.tag(MangaSource::class.java, mangaSource)
 			.build()
+
+
+		@Blocking
+		private fun Uri.exists(): Boolean = when {
+			isFileUri() -> toFile().exists()
+			isZipUri() -> {
+				val file = File(requireNotNull(schemeSpecificPart))
+				file.exists() && ZipFile(file).use { it.getEntry(fragment) != null }
+			}
+
+			else -> false
+		}
+
+		@Blocking
+		private fun Uri.isTargetNotEmpty(): Boolean = when {
+			isFileUri() -> toFile().isNotEmpty()
+			isZipUri() -> {
+				val file = File(requireNotNull(schemeSpecificPart))
+				file.exists() && ZipFile(file).use { (it.getEntry(fragment)?.size ?: 0L) != 0L }
+			}
+
+			else -> false
+		}
 	}
 }

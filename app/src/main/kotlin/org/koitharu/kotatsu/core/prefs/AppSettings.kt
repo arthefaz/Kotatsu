@@ -2,6 +2,7 @@ package org.koitharu.kotatsu.core.prefs
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.content.pm.ActivityInfo
 import android.net.ConnectivityManager
 import android.net.Uri
 import android.os.Build
@@ -29,10 +30,12 @@ import org.koitharu.kotatsu.parsers.model.SortOrder
 import org.koitharu.kotatsu.parsers.util.find
 import org.koitharu.kotatsu.parsers.util.mapNotNullToSet
 import org.koitharu.kotatsu.parsers.util.mapToSet
+import org.koitharu.kotatsu.parsers.util.nullIfEmpty
 import org.koitharu.kotatsu.reader.domain.ReaderColorFilter
 import java.io.File
 import java.net.Proxy
 import java.util.EnumSet
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -119,6 +122,10 @@ class AppSettings @Inject constructor(@ApplicationContext context: Context) {
 		get() = prefs.getBoolean(KEY_READER_DOUBLE_PAGES, false)
 		set(value) = prefs.edit { putBoolean(KEY_READER_DOUBLE_PAGES, value) }
 
+	val readerScreenOrientation: Int
+		get() = prefs.getString(KEY_READER_ORIENTATION, null)?.toIntOrNull()
+			?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+
 	val isReaderVolumeButtonsEnabled: Boolean
 		get() = prefs.getBoolean(KEY_READER_VOLUME_BUTTONS, false)
 
@@ -133,10 +140,6 @@ class AppSettings @Inject constructor(@ApplicationContext context: Context) {
 
 	val isReaderOptimizationEnabled: Boolean
 		get() = prefs.getBoolean(KEY_READER_OPTIMIZE, false)
-
-	var isTrafficWarningEnabled: Boolean
-		get() = prefs.getBoolean(KEY_TRAFFIC_WARNING, true)
-		set(value) = prefs.edit { putBoolean(KEY_TRAFFIC_WARNING, value) }
 
 	val isOfflineCheckDisabled: Boolean
 		get() = prefs.getBoolean(KEY_OFFLINE_DISABLED, false)
@@ -239,9 +242,6 @@ class AppSettings @Inject constructor(@ApplicationContext context: Context) {
 			}
 		} ?: EnumSet.allOf(SearchSuggestionType::class.java)
 
-	val isLoggingEnabled: Boolean
-		get() = prefs.getBoolean(KEY_LOGGING_ENABLED, false)
-
 	var isBiometricProtectionEnabled: Boolean
 		get() = prefs.getBoolean(KEY_PROTECT_APP_BIOMETRIC, true)
 		set(value) = prefs.edit { putBoolean(KEY_PROTECT_APP_BIOMETRIC, value) }
@@ -299,6 +299,10 @@ class AppSettings @Inject constructor(@ApplicationContext context: Context) {
 		get() = prefs.getInt(KEY_SOURCES_VERSION, 0)
 		set(value) = prefs.edit { putInt(KEY_SOURCES_VERSION, value) }
 
+	var isAllSourcesEnabled: Boolean
+		get() = prefs.getBoolean(KEY_SOURCES_ENABLED_ALL, false)
+		set(value) = prefs.edit { putBoolean(KEY_SOURCES_ENABLED_ALL, value) }
+
 	val isPagesNumbersEnabled: Boolean
 		get() = prefs.getBoolean(KEY_PAGES_NUMBERS, false)
 
@@ -331,8 +335,9 @@ class AppSettings @Inject constructor(@ApplicationContext context: Context) {
 			}
 		}
 
-	val isDownloadsWiFiOnly: Boolean
-		get() = prefs.getBoolean(KEY_DOWNLOADS_WIFI, false)
+	var allowDownloadOnMeteredNetwork: TriStateOption
+		get() = prefs.getEnumValue(KEY_DOWNLOADS_METERED_NETWORK, TriStateOption.ASK)
+		set(value) = prefs.edit { putEnumValue(KEY_DOWNLOADS_METERED_NETWORK, value) }
 
 	val preferredDownloadFormat: DownloadFormat
 		get() = prefs.getEnumValue(KEY_DOWNLOADS_FORMAT, DownloadFormat.AUTOMATIC)
@@ -362,8 +367,8 @@ class AppSettings @Inject constructor(@ApplicationContext context: Context) {
 	val isReaderBarEnabled: Boolean
 		get() = prefs.getBoolean(KEY_READER_BAR, true)
 
-	val isReaderSliderEnabled: Boolean
-		get() = prefs.getBoolean(KEY_READER_SLIDER, true)
+	val isReaderBarTransparent: Boolean
+		get() = prefs.getBoolean(KEY_READER_BAR_TRANSPARENT, true)
 
 	val isReaderKeepScreenOn: Boolean
 		get() = prefs.getBoolean(KEY_READER_SCREEN_ON, true)
@@ -412,10 +417,10 @@ class AppSettings @Inject constructor(@ApplicationContext context: Context) {
 		get() = prefs.getString(KEY_PROXY_PORT, null)?.toIntOrNull() ?: 0
 
 	val proxyLogin: String?
-		get() = prefs.getString(KEY_PROXY_LOGIN, null)?.takeUnless { it.isEmpty() }
+		get() = prefs.getString(KEY_PROXY_LOGIN, null)?.nullIfEmpty()
 
 	val proxyPassword: String?
-		get() = prefs.getString(KEY_PROXY_PASSWORD, null)?.takeUnless { it.isEmpty() }
+		get() = prefs.getString(KEY_PROXY_PASSWORD, null)?.nullIfEmpty()
 
 	var localListOrder: SortOrder
 		get() = prefs.getEnumValue(KEY_LOCAL_LIST_ORDER, SortOrder.NEWEST)
@@ -474,9 +479,25 @@ class AppSettings @Inject constructor(@ApplicationContext context: Context) {
 	val periodicalBackupFrequency: Long
 		get() = prefs.getString(KEY_BACKUP_PERIODICAL_FREQUENCY, null)?.toLongOrNull() ?: 7L
 
-	var periodicalBackupOutput: Uri?
+	val periodicalBackupFrequencyMillis: Long
+		get() = TimeUnit.DAYS.toMillis(periodicalBackupFrequency)
+
+	val periodicalBackupMaxCount: Int
+		get() = if (prefs.getBoolean(KEY_BACKUP_PERIODICAL_TRIM, true)) {
+			prefs.getInt(KEY_BACKUP_PERIODICAL_COUNT, 10)
+		} else {
+			Int.MAX_VALUE
+		}
+
+	var periodicalBackupDirectory: Uri?
 		get() = prefs.getString(KEY_BACKUP_PERIODICAL_OUTPUT, null)?.toUriOrNull()
 		set(value) = prefs.edit { putString(KEY_BACKUP_PERIODICAL_OUTPUT, value?.toString()) }
+
+	val isBackupTelegramUploadEnabled: Boolean
+		get() = prefs.getBoolean(KEY_BACKUP_TG_ENABLED, false)
+
+	val backupTelegramChatId: String?
+		get() = prefs.getString(KEY_BACKUP_TG_CHAT, null)?.nullIfEmpty()
 
 	val isReadingTimeEstimationEnabled: Boolean
 		get() = prefs.getBoolean(KEY_READING_TIME, true)
@@ -576,7 +597,6 @@ class AppSettings @Inject constructor(@ApplicationContext context: Context) {
 		const val KEY_THEME = "theme"
 		const val KEY_COLOR_THEME = "color_theme"
 		const val KEY_THEME_AMOLED = "amoled_theme"
-		const val KEY_TRAFFIC_WARNING = "traffic_warning"
 		const val KEY_OFFLINE_DISABLED = "no_offline"
 		const val KEY_PAGES_CACHE_CLEAR = "pages_cache_clear"
 		const val KEY_HTTP_CACHE_CLEAR = "http_cache_clear"
@@ -595,6 +615,7 @@ class AppSettings @Inject constructor(@ApplicationContext context: Context) {
 		const val KEY_READER_CONTROL_LTR = "reader_taps_ltr"
 		const val KEY_READER_FULLSCREEN = "reader_fullscreen"
 		const val KEY_READER_VOLUME_BUTTONS = "reader_volume_buttons"
+		const val KEY_READER_ORIENTATION = "reader_orientation"
 		const val KEY_TRACKER_ENABLED = "tracker_enabled"
 		const val KEY_TRACKER_WIFI_ONLY = "tracker_wifi"
 		const val KEY_TRACKER_FREQUENCY = "tracker_freq"
@@ -622,6 +643,8 @@ class AppSettings @Inject constructor(@ApplicationContext context: Context) {
 		const val KEY_RESTORE = "restore"
 		const val KEY_BACKUP_PERIODICAL_ENABLED = "backup_periodic"
 		const val KEY_BACKUP_PERIODICAL_FREQUENCY = "backup_periodic_freq"
+		const val KEY_BACKUP_PERIODICAL_TRIM = "backup_periodic_trim"
+		const val KEY_BACKUP_PERIODICAL_COUNT = "backup_periodic_count"
 		const val KEY_BACKUP_PERIODICAL_OUTPUT = "backup_periodic_output"
 		const val KEY_BACKUP_PERIODICAL_LAST = "backup_periodic_last"
 		const val KEY_HISTORY_GROUPING = "history_grouping"
@@ -642,7 +665,7 @@ class AppSettings @Inject constructor(@ApplicationContext context: Context) {
 		const val KEY_ANILIST = "anilist"
 		const val KEY_MAL = "mal"
 		const val KEY_KITSU = "kitsu"
-		const val KEY_DOWNLOADS_WIFI = "downloads_wifi"
+		const val KEY_DOWNLOADS_METERED_NETWORK = "downloads_metered_network"
 		const val KEY_DOWNLOADS_FORMAT = "downloads_format"
 		const val KEY_ALL_FAVOURITES_VISIBLE = "all_favourites_visible"
 		const val KEY_DOH = "doh"
@@ -651,7 +674,7 @@ class AppSettings @Inject constructor(@ApplicationContext context: Context) {
 		const val KEY_SYNC = "sync"
 		const val KEY_SYNC_SETTINGS = "sync_settings"
 		const val KEY_READER_BAR = "reader_bar"
-		const val KEY_READER_SLIDER = "reader_slider"
+		const val KEY_READER_BAR_TRANSPARENT = "reader_bar_transparent"
 		const val KEY_READER_BACKGROUND = "reader_background"
 		const val KEY_READER_SCREEN_ON = "reader_screen_on"
 		const val KEY_SHORTCUTS = "dynamic_shortcuts"
@@ -665,7 +688,6 @@ class AppSettings @Inject constructor(@ApplicationContext context: Context) {
 		const val KEY_WEBTOON_ZOOM_OUT = "webtoon_zoom_out"
 		const val KEY_PREFETCH_CONTENT = "prefetch_content"
 		const val KEY_APP_LOCALE = "app_locale"
-		const val KEY_LOGGING_ENABLED = "logging"
 		const val KEY_SOURCES_GRID = "sources_grid"
 		const val KEY_UPDATES_UNSTABLE = "updates_unstable"
 		const val KEY_TIPS_CLOSED = "tips_closed"
@@ -703,16 +725,26 @@ class AppSettings @Inject constructor(@ApplicationContext context: Context) {
 		const val KEY_FEED_HEADER = "feed_header"
 		const val KEY_SEARCH_SUGGESTION_TYPES = "search_suggest_types"
 		const val KEY_SOURCES_VERSION = "sources_version"
+		const val KEY_SOURCES_ENABLED_ALL = "sources_enabled_all"
 		const val KEY_QUICK_FILTER = "quick_filter"
+		const val KEY_BACKUP_TG_ENABLED = "backup_periodic_tg_enabled"
+		const val KEY_BACKUP_TG_CHAT = "backup_periodic_tg_chat_id"
 
 		// keys for non-persistent preferences
 		const val KEY_APP_VERSION = "app_version"
 		const val KEY_IGNORE_DOZE = "ignore_dose"
 		const val KEY_TRACKER_DEBUG = "tracker_debug"
-		const val KEY_LOGS_SHARE = "logs_share"
 		const val KEY_APP_UPDATE = "app_update"
-		const val KEY_APP_TRANSLATION = "about_app_translation"
-		const val PROXY_TEST = "proxy_test"
+		const val KEY_LINK_WEBLATE = "about_app_translation"
+		const val KEY_LINK_TELEGRAM = "about_telegram"
+		const val KEY_LINK_GITHUB = "about_github"
+		const val KEY_LINK_MANUAL = "about_help"
+		const val KEY_PROXY_TEST = "proxy_test"
+		const val KEY_OPEN_BROWSER = "open_browser"
+		const val KEY_HANDLE_LINKS = "handle_links"
+		const val KEY_BACKUP_TG_OPEN = "backup_periodic_tg_open"
+		const val KEY_BACKUP_TG_TEST = "backup_periodic_tg_test"
+		const val KEY_CLEAR_MANGA_DATA = "manga_data_clear"
 
 		// old keys are for migration only
 		private const val KEY_IMAGES_PROXY_OLD = "images_proxy"

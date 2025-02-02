@@ -25,13 +25,11 @@ import kotlinx.coroutines.sync.withPermit
 import org.koitharu.kotatsu.R
 import org.koitharu.kotatsu.core.model.LocalMangaSource
 import org.koitharu.kotatsu.core.model.UnknownMangaSource
+import org.koitharu.kotatsu.core.nav.AppRouter
 import org.koitharu.kotatsu.core.parser.MangaRepository
 import org.koitharu.kotatsu.core.prefs.ListMode
 import org.koitharu.kotatsu.core.ui.BaseViewModel
-import org.koitharu.kotatsu.core.util.ext.MutableEventFlow
-import org.koitharu.kotatsu.core.util.ext.call
 import org.koitharu.kotatsu.core.util.ext.printStackTraceDebug
-import org.koitharu.kotatsu.download.ui.worker.DownloadWorker
 import org.koitharu.kotatsu.explore.data.MangaSourcesRepository
 import org.koitharu.kotatsu.favourites.domain.FavouritesRepository
 import org.koitharu.kotatsu.history.data.HistoryRepository
@@ -55,15 +53,13 @@ class SearchViewModel @Inject constructor(
 	savedStateHandle: SavedStateHandle,
 	private val mangaListMapper: MangaListMapper,
 	private val mangaRepositoryFactory: MangaRepository.Factory,
-	private val downloadScheduler: DownloadWorker.Scheduler,
 	private val sourcesRepository: MangaSourcesRepository,
 	private val historyRepository: HistoryRepository,
 	private val localMangaRepository: LocalMangaRepository,
 	private val favouritesRepository: FavouritesRepository,
 ) : BaseViewModel() {
 
-	val onDownloadStarted = MutableEventFlow<Unit>()
-	val query = savedStateHandle.get<String>(SearchActivity.EXTRA_QUERY).orEmpty()
+	val query = savedStateHandle.get<String>(AppRouter.KEY_QUERY).orEmpty()
 
 	private val retryCounter = MutableStateFlow(0)
 	private val listData = retryCounter.flatMapLatest {
@@ -107,13 +103,6 @@ class SearchViewModel @Inject constructor(
 
 	fun retry() {
 		retryCounter.value += 1
-	}
-
-	fun download(items: Set<Manga>) {
-		launchJob(Dispatchers.Default) {
-			downloadScheduler.schedule(items)
-			onDownloadStarted.call(Unit)
-		}
 	}
 
 	@CheckResult

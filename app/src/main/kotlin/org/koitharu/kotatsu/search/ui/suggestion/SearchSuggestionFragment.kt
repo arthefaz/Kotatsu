@@ -7,7 +7,7 @@ import androidx.core.graphics.Insets
 import androidx.core.view.updatePadding
 import androidx.fragment.app.activityViewModels
 import androidx.recyclerview.widget.ItemTouchHelper
-import coil.ImageLoader
+import coil3.ImageLoader
 import dagger.hilt.android.AndroidEntryPoint
 import org.koitharu.kotatsu.R
 import org.koitharu.kotatsu.core.os.VoiceInputContract
@@ -70,10 +70,5 @@ class SearchSuggestionFragment :
 	override fun onResume() {
 		super.onResume()
 		viewModel.onResume()
-	}
-
-	companion object {
-
-		fun newInstance() = SearchSuggestionFragment()
 	}
 }

@@ -5,28 +5,28 @@ import android.widget.Toast
 import androidx.activity.result.ActivityResultCaller
 import androidx.annotation.StringRes
 import androidx.collection.MutableScatterMap
+import androidx.fragment.app.Fragment
+import androidx.fragment.app.FragmentActivity
 import androidx.fragment.app.FragmentManager
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import org.koitharu.kotatsu.R
-import org.koitharu.kotatsu.alternatives.ui.AlternativesActivity
-import org.koitharu.kotatsu.browser.BrowserActivity
 import org.koitharu.kotatsu.browser.cloudflare.CloudFlareActivity
 import org.koitharu.kotatsu.core.exceptions.CloudFlareProtectedException
 import org.koitharu.kotatsu.core.exceptions.ProxyConfigException
 import org.koitharu.kotatsu.core.exceptions.UnsupportedSourceException
+import org.koitharu.kotatsu.core.nav.AppRouter
+import org.koitharu.kotatsu.core.nav.router
 import org.koitharu.kotatsu.core.prefs.AppSettings
-import org.koitharu.kotatsu.core.ui.dialog.ErrorDetailsDialog
-import org.koitharu.kotatsu.core.util.ext.findActivity
+import org.koitharu.kotatsu.core.ui.dialog.buildAlertDialog
+import org.koitharu.kotatsu.core.util.ext.restartApplication
 import org.koitharu.kotatsu.parsers.exception.AuthRequiredException
 import org.koitharu.kotatsu.parsers.exception.NotFoundException
 import org.koitharu.kotatsu.parsers.model.Manga
 import org.koitharu.kotatsu.parsers.model.MangaSource
 import org.koitharu.kotatsu.scrobbling.common.domain.ScrobblerAuthRequiredException
 import org.koitharu.kotatsu.scrobbling.common.ui.ScrobblerAuthHelper
-import org.koitharu.kotatsu.settings.SettingsActivity
 import org.koitharu.kotatsu.settings.sources.auth.SourceAuthActivity
 import java.security.cert.CertPathValidatorException
 import javax.inject.Provider
@@ -49,8 +49,8 @@ class ExceptionResolver @AssistedInject constructor(
 		handleActivityResult(CloudFlareActivity.TAG, it)
 	}
 
-	fun showDetails(e: Throwable, url: String?) {
-		ErrorDetailsDialog.show(host.getChildFragmentManager(), e, url)
+	fun showErrorDetails(e: Throwable, url: String? = null) {
+		host.router()?.showErrorDialog(e, url)
 	}
 
 	suspend fun resolve(e: Throwable): Boolean = when (e) {
@@ -63,9 +63,7 @@ class ExceptionResolver @AssistedInject constructor(
 		}
 
 		is ProxyConfigException -> {
-			host.withContext {
-				startActivity(SettingsActivity.newProxySettingsIntent(this))
-			}
+			host.router()?.openProxySettings()
 			false
 		}
 
@@ -85,9 +83,7 @@ class ExceptionResolver @AssistedInject constructor(
 				true
 			} else {
 				host.withContext {
-					authHelper.startAuth(this, e.scrobbler).onFailure {
-						showDetails(it, null)
-					}
+					authHelper.startAuth(this, e.scrobbler).onFailure(::showErrorDetails)
 				}
 				false
 			}
@@ -106,12 +102,12 @@ class ExceptionResolver @AssistedInject constructor(
 		sourceAuthContract.launch(source)
 	}
 
-	private fun openInBrowser(url: String) = host.withContext {
-		startActivity(BrowserActivity.newIntent(this, url, null, null))
+	private fun openInBrowser(url: String) {
+		host.router()?.openBrowser(url, null, null)
 	}
 
-	private fun openAlternatives(manga: Manga) = host.withContext {
-		startActivity(AlternativesActivity.newIntent(this, manga))
+	private fun openAlternatives(manga: Manga) {
+		host.router()?.openAlternatives(manga)
 	}
 
 	private fun handleActivityResult(tag: String, result: Boolean) {
@@ -124,19 +120,26 @@ class ExceptionResolver @AssistedInject constructor(
 			Toast.makeText(ctx, R.string.operation_not_supported, Toast.LENGTH_SHORT).show()
 			return
 		}
-		MaterialAlertDialogBuilder(ctx)
-			.setTitle(R.string.ignore_ssl_errors)
-			.setMessage(R.string.ignore_ssl_errors_summary)
-			.setPositiveButton(R.string.apply) { _, _ ->
+		buildAlertDialog(ctx) {
+			setTitle(R.string.ignore_ssl_errors)
+			setMessage(R.string.ignore_ssl_errors_summary)
+			setPositiveButton(R.string.apply) { _, _ ->
 				settings.isSSLBypassEnabled = true
-				Toast.makeText(ctx, R.string.settings_apply_restart_required, Toast.LENGTH_SHORT).show()
-				ctx.findActivity()?.finishAffinity()
-			}.setNegativeButton(android.R.string.cancel, null)
-			.show()
+				Toast.makeText(ctx, R.string.settings_apply_restart_required, Toast.LENGTH_LONG).show()
+				ctx.restartApplication()
+			}
+			setNegativeButton(android.R.string.cancel, null)
+		}.show()
 	}
 
 	private inline fun Host.withContext(block: Context.() -> Unit) {
 		getContext()?.apply(block)
+	}
+
+	private fun Host.router(): AppRouter? = when (this) {
+		is FragmentActivity -> router
+		is Fragment -> router
+		else -> null
 	}
 
 	interface Host : ActivityResultCaller {

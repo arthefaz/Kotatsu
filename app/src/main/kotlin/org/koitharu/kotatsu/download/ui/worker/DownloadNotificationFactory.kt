@@ -12,9 +12,10 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.PendingIntentCompat
 import androidx.core.graphics.drawable.toBitmap
 import androidx.work.WorkManager
-import coil.ImageLoader
-import coil.request.ImageRequest
-import coil.size.Scale
+import coil3.ImageLoader
+import coil3.request.ImageRequest
+import coil3.request.allowHardware
+import coil3.size.Scale
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
@@ -24,16 +25,16 @@ import kotlinx.coroutines.sync.withLock
 import org.koitharu.kotatsu.R
 import org.koitharu.kotatsu.core.ErrorReporterReceiver
 import org.koitharu.kotatsu.core.model.LocalMangaSource
+import org.koitharu.kotatsu.core.nav.AppRouter
 import org.koitharu.kotatsu.core.util.ext.getDrawableOrThrow
 import org.koitharu.kotatsu.core.util.ext.isReportable
+import org.koitharu.kotatsu.core.util.ext.mangaSourceExtra
 import org.koitharu.kotatsu.core.util.ext.printStackTraceDebug
-import org.koitharu.kotatsu.details.ui.DetailsActivity
 import org.koitharu.kotatsu.download.domain.DownloadState
 import org.koitharu.kotatsu.download.ui.list.DownloadsActivity
 import org.koitharu.kotatsu.parsers.model.Manga
 import org.koitharu.kotatsu.parsers.util.format
 import org.koitharu.kotatsu.parsers.util.runCatchingCancellable
-import org.koitharu.kotatsu.search.ui.MangaListActivity
 import java.util.UUID
 import com.google.android.material.R as materialR
 
@@ -213,13 +214,15 @@ class DownloadNotificationFactory @AssistedInject constructor(
 				builder.setWhen(System.currentTimeMillis())
 				builder.setStyle(NotificationCompat.BigTextStyle().bigText(state.errorMessage))
 				if (state.error.isReportable()) {
-					builder.addAction(
-						NotificationCompat.Action(
-							0,
-							context.getString(R.string.report),
-							ErrorReporterReceiver.getPendingIntent(context, state.error),
-						),
-					)
+					ErrorReporterReceiver.getPendingIntent(context, state.error)?.let { reportIntent ->
+						builder.addAction(
+							NotificationCompat.Action(
+								0,
+								context.getString(R.string.report),
+								reportIntent,
+							),
+						)
+					}
 				}
 			}
 
@@ -263,9 +266,9 @@ class DownloadNotificationFactory @AssistedInject constructor(
 		context,
 		manga.hashCode(),
 		if (manga != null) {
-			DetailsActivity.newIntent(context, manga)
+			AppRouter.detailsIntent(context, manga)
 		} else {
-			MangaListActivity.newIntent(context, LocalMangaSource, null)
+			AppRouter.listIntent(context, LocalMangaSource, null)
 		},
 		PendingIntent.FLAG_CANCEL_CURRENT,
 		false,
@@ -277,7 +280,7 @@ class DownloadNotificationFactory @AssistedInject constructor(
 				ImageRequest.Builder(context)
 					.data(manga.coverUrl)
 					.allowHardware(false)
-					.tag(manga.source)
+					.mangaSourceExtra(manga.source)
 					.size(coverWidth, coverHeight)
 					.scale(Scale.FILL)
 					.build(),

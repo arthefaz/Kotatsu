@@ -1,6 +1,5 @@
 package org.koitharu.kotatsu.settings.sources.manage
 
-import android.content.Intent
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.Menu
@@ -14,10 +13,11 @@ import androidx.core.view.updatePadding
 import androidx.fragment.app.viewModels
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.RecyclerView
-import coil.ImageLoader
+import coil3.ImageLoader
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import org.koitharu.kotatsu.R
+import org.koitharu.kotatsu.core.nav.router
 import org.koitharu.kotatsu.core.os.AppShortcutManager
 import org.koitharu.kotatsu.core.prefs.AppSettings
 import org.koitharu.kotatsu.core.ui.BaseFragment
@@ -34,7 +34,6 @@ import org.koitharu.kotatsu.settings.SettingsActivity
 import org.koitharu.kotatsu.settings.sources.SourceSettingsFragment
 import org.koitharu.kotatsu.settings.sources.adapter.SourceConfigAdapter
 import org.koitharu.kotatsu.settings.sources.adapter.SourceConfigListener
-import org.koitharu.kotatsu.settings.sources.catalog.SourcesCatalogActivity
 import org.koitharu.kotatsu.settings.sources.model.SourceConfigItem
 import javax.inject.Inject
 
@@ -106,8 +105,11 @@ class SourcesManageFragment :
 	}
 
 	override fun onItemSettingsClick(item: SourceConfigItem.SourceItem) {
-		val fragment = SourceSettingsFragment.newInstance(item.source)
-		(activity as? SettingsActivity)?.openFragment(fragment, false)
+		(activity as? SettingsActivity)?.openFragment(
+			fragmentClass = SourceSettingsFragment::class.java,
+			args = Bundle(1).apply { putString(SourceSettingsFragment.EXTRA_SOURCE, item.source.name) },
+			isFromRoot = false,
+		)
 	}
 
 	override fun onItemLiftClick(item: SourceConfigItem.SourceItem) {
@@ -149,7 +151,7 @@ class SourcesManageFragment :
 
 		override fun onMenuItemSelected(menuItem: MenuItem): Boolean = when (menuItem.itemId) {
 			R.id.action_catalog -> {
-				startActivity(Intent(context, SourcesCatalogActivity::class.java))
+				router.openSourcesCatalog()
 				true
 			}
 
@@ -169,6 +171,8 @@ class SourcesManageFragment :
 		override fun onPrepareMenu(menu: Menu) {
 			super.onPrepareMenu(menu)
 			menu.findItem(R.id.action_no_nsfw).isChecked = settings.isNsfwContentDisabled
+			menu.findItem(R.id.action_disable_all).isVisible = !settings.isAllSourcesEnabled
+			menu.findItem(R.id.action_catalog).isVisible = !settings.isAllSourcesEnabled
 		}
 
 		override fun onMenuItemActionExpand(item: MenuItem): Boolean {
